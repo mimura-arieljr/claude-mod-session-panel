@@ -11,7 +11,7 @@ import {
   relativePath,
 } from './model'
 import { saveSnapshot } from './thread'
-import { changeThread } from './thread-state'
+import { changeThread, setTurnRunning } from './thread-state'
 
 type Patch = readonly { lines: readonly string[] }[] | undefined
 
@@ -59,7 +59,7 @@ export function registerCollectors(on: On): void {
       await changeThread($, t => addMcp(t, e.tool))
     }
     return ran
-  })
+  }).catch(($, e, next) => next(e)) // Observer only: a failure here never blocks the call.
 
   on('skill.prompt', async ($, e, next) => {
     await changeThread($, t => addSkill(t, e.skill))
@@ -73,7 +73,10 @@ export function registerCollectors(on: On): void {
       const counted = usage === undefined ? current : addUsage(current, usage)
       return at === null ? counted : { ...counted, lastReplyAt: at }
     })
-    if (at !== null) await saveSnapshot($, t)
+    if (at !== null) {
+      await saveSnapshot($, t)
+      await setTurnRunning($, false)
+    }
     return next(e)
   })
 }

@@ -31,7 +31,7 @@ export function registerAssumptions(on: On): void {
     const at = await $.clock.now()
     await changeThread($, t => addAssumption(t, { text, isFromAgent: e.agentId !== undefined, at }))
     return { result: 'noted' }
-  })
+  }).catch(() => ({ result: 'noted' })) // Never fail Claude's call over the panel.
 
   on('prompt.compose', async ($, e, next) => {
     const composed = await next(e)

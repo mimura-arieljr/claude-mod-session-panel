@@ -2,7 +2,13 @@ import type { On, StateDollar } from 'claude-code'
 
 import type { Thread } from '../types'
 import { emptyThread } from './model'
-import { changeThread, readPendingSwitch, readThread, setPendingSwitch } from './thread-state'
+import {
+  changeThread,
+  readPendingSwitch,
+  readThread,
+  setPendingSwitch,
+  setTurnRunning,
+} from './thread-state'
 
 const MAX_THREADS = 50
 const INDEX_KEY = 'threads'
@@ -56,7 +62,7 @@ export function registerThread(on: On): void {
       await setPendingSwitch($, e.source)
     }
     return next(e)
-  })
+  }).catch(($, e, next) => next(e))
 
   on('session.end', async ($, e, next) => {
     await saveSnapshot($, await readThread($))
@@ -67,7 +73,10 @@ export function registerThread(on: On): void {
   })
 
   on('turn.start', async ($, e, next) => {
-    if (e.agentId === undefined) await syncThread($)
+    if (e.agentId === undefined) {
+      await syncThread($)
+      await setTurnRunning($, true)
+    }
     return next(e)
   })
 }
