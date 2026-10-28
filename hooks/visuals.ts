@@ -43,43 +43,8 @@ export function base64(bytes: Uint8Array): string {
   return out
 }
 
-function rgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16)
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-}
-
 function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n))
-}
-
-// RGBA pixels of a ring, filled clockwise from 12 o'clock to `percent`, on the card color.
-export function ringPixels(percent: number, size: number): Uint8Array {
-  const bytes = new Uint8Array(size * size * 4)
-  const fill = rgb(COLORS.accent)
-  const track = rgb(COLORS.track)
-  const bg = rgb(COLORS.card)
-  const center = size / 2
-  const outer = size / 2 - 2
-  const inner = outer - (size * 9) / 104
-  const share = clamp01(percent / 100)
-
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx = x + 0.5 - center
-      const dy = y + 0.5 - center
-      const d = Math.sqrt(dx * dx + dy * dy)
-      const coverage = clamp01(outer + 0.5 - d) * clamp01(d - (inner - 0.5))
-      let angle = Math.atan2(dx, -dy)
-      if (angle < 0) angle += 2 * Math.PI
-      const ink = angle / (2 * Math.PI) < share ? fill : track
-      const i = (y * size + x) * 4
-      for (let k = 0; k < 3; k++) {
-        bytes[i + k] = Math.round(bg[k]! + (ink[k]! - bg[k]!) * coverage)
-      }
-      bytes[i + 3] = 255
-    }
-  }
-  return bytes
 }
 
 // How many of `cells` go to added and removed lines, each side shown when present.
@@ -127,4 +92,77 @@ export function ringSvg(percent: number): string {
     `<text x="52" y="70" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" letter-spacing="0.8" fill="${COLORS.muted}">CONTEXT</text>`,
     '</svg>',
   ].join('')
+}
+
+// Braille dot bits by [x][y] within a 2×4 cell.
+const BRAILLE_BITS = [
+  [0x01, 0x02, 0x04, 0x40],
+  [0x08, 0x10, 0x20, 0x80],
+]
+
+function hexNumber(hex: string): number {
+  return parseInt(hex.slice(1), 16)
+}
+
+// Raster cells of a braille ring with the percent inside: [codePoint, fg, bg] per cell, row-major.
+export function ringCells(percent: number, columns: number, rows: number): Uint32Array {
+  const words = new Uint32Array(columns * rows * 3)
+  const fill = hexNumber(COLORS.accent)
+  const track = hexNumber(COLORS.track)
+  const bg = hexNumber(COLORS.card)
+  // Braille dots are square on a 1:2 cell, so the ring is round in dot space.
+  const width = columns * 2
+  const height = rows * 4
+  const cx = width / 2
+  const cy = height / 2
+  const outer = Math.min(width, height) / 2 - 0.25
+  const inner = outer * 0.72
+  const share = clamp01(percent / 100)
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < columns; col++) {
+      let bits = 0
+      let filled = 0
+      let tracked = 0
+      for (let dx = 0; dx < 2; dx++) {
+        for (let dy = 0; dy < 4; dy++) {
+          const x = col * 2 + dx + 0.5 - cx
+          const y = row * 4 + dy + 0.5 - cy
+          const d = Math.sqrt(x * x + y * y)
+          if (d > outer || d < inner) continue
+          bits |= BRAILLE_BITS[dx]![dy]!
+          let angle = Math.atan2(x, -y)
+          if (angle < 0) angle += 2 * Math.PI
+          if (angle / (2 * Math.PI) < share) filled++
+          else tracked++
+        }
+      }
+      const i = (row * columns + col) * 3
+      words[i] = bits === 0 ? 0x20 : 0x2800 + bits
+      words[i + 1] = filled >= tracked && filled > 0 ? fill : track
+      words[i + 2] = bg
+    }
+  }
+
+  // The percent and a label, centered in the hole.
+  const write = (text: string, row: number, color: number) => {
+    const start = Math.floor((columns - text.length) / 2)
+    for (let k = 0; k < text.length; k++) {
+      const i = (row * columns + start + k) * 3
+      words[i] = text.charCodeAt(k)
+      words[i + 1] = color
+    }
+  }
+  const middle = Math.floor((rows - 1) / 2)
+  write(`${Math.round(percent)}%`, middle, hexNumber(COLORS.text))
+  write('ctx', middle + 1, hexNumber(COLORS.muted))
+  return words
+}
+
+// Raster cells as the element wants them: little-endian u32s, base64.
+export function rasterCells(words: Uint32Array): string {
+  const bytes = new Uint8Array(words.length * 4)
+  const view = new DataView(bytes.buffer)
+  words.forEach((word, i) => view.setUint32(i * 4, word, true))
+  return base64(bytes)
 }

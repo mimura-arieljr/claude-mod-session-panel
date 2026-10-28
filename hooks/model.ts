@@ -61,7 +61,7 @@ export function progress(t: Thread): { done: number; total: number; percent: num
 
 const DECLARATIONS = [
   /\bfunction\s*\*?\s+([A-Za-z_$][\w$]*)/,
-  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\(|function\b|[A-Za-z_$][\w$]*\s*=>)/,
+  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*(?::\s*[^=]+)?=>|[A-Za-z_$][\w$]*\s*=>)/,
   /^\s*(?:async\s+)?def\s+([A-Za-z_]\w*)/,
   /\bclass\s+([A-Za-z_$][\w$]*)/,
   /^\s*(?:(?:public|private|protected|static|async|override|readonly)\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::\s*[^={]+)?\{\s*$/,

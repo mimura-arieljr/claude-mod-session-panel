@@ -126,3 +126,11 @@ test('toggle collapses and expands', async () => {
   expect(t.collapsed).toEqual(['files'])
   expect(toggleSection(t, 'files').collapsed).toEqual([])
 })
+
+test('a parenthesized value is not read as a function', async () => {
+  expect(summarizeChange(['+  const n = (a << 16) | b', '+  const i = (y * size + x) * 4'])).toEqual([])
+  expect(summarizeChange(['+const go = (x: number) => x', '+const run = async () => {'])).toEqual([
+    'added go',
+    'added run',
+  ])
+})

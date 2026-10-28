@@ -3,7 +3,7 @@ import type { EngineInterface, On, RenderChildren } from 'claude-code'
 import type { SectionId, Todo } from '../types'
 import { cacheStatus, formatTokens, formatUsd, progress, toggleSection } from './model'
 import { changeThread, readNow, readThread, readTurnRunning, setNow } from './thread-state'
-import { base64, cacheFraction, COLORS, diffCells, ringPixels, ringSvg, splitPath } from './visuals'
+import { cacheFraction, COLORS, diffCells, rasterCells, ringCells, ringSvg, splitPath } from './visuals'
 
 export const PANE = 'session-panel'
 const TITLE = 'Session'
@@ -11,7 +11,6 @@ const TITLE = 'Session'
 const DOCK_COLUMNS = 56
 const DOCK_MIN_TERMINAL = 110
 const MAX_ROWS = 10
-const RING_PIXELS = 96
 const RING_COLUMNS = 12
 const RING_ROWS = 6
 const FILE_BAR_CELLS = 7
@@ -40,12 +39,12 @@ function more<T>(list: readonly T[]): { shown: readonly T[]; hidden: number } {
   return { shown: list.slice(0, MAX_ROWS), hidden: Math.max(0, list.length - MAX_ROWS) }
 }
 
-// The ring's pixels, kept per whole percent.
+// The ring's raster cells, kept per whole percent.
 function ring(percent: number): string {
   const key = Math.round(percent)
   let encoded = rings.get(key)
   if (encoded === undefined) {
-    encoded = base64(ringPixels(key, RING_PIXELS))
+    encoded = rasterCells(ringCells(key, RING_COLUMNS, RING_ROWS))
     rings.set(key, encoded)
   }
   return encoded
@@ -118,14 +117,7 @@ export function registerPanel(on: On, ttlMs: number): void {
     ) => {
       const isCollapsed = t.collapsed.includes(id)
       return (
-        <Box
-          key={id}
-          flexDirection="column"
-          backgroundColor={COLORS.card}
-          borderStyle="round"
-          borderColor={COLORS.cardBorder}
-          paddingX={1}
-        >
+        <Box key={id} flexDirection="column" backgroundColor={COLORS.card} paddingX={1} paddingY={1}>
           <Box flexDirection="row" justifyContent="space-between">
             <Button
               plain
@@ -228,19 +220,11 @@ export function registerPanel(on: On, ttlMs: number): void {
     const cache = cacheStatus(t.lastReplyAt, at, ttlMs, isTurnRunning)
     const cacheShare = cacheFraction(t.lastReplyAt, at, ttlMs, isTurnRunning)
     const percent = context?.percent ?? 0
-    // The terminal draws pixels; desktop, editor and mobile draw the design's SVG.
+    // The terminal draws a braille ring in cells; desktop, editor and mobile draw the design's SVG.
     const contextRing = () => {
       if (e.surface === 'terminal') {
-        const { Image } = $.ui.resolve(e)
-        return (
-          <Image
-            key="context-ring"
-            source={{ rgba: ring(percent), width: RING_PIXELS, height: RING_PIXELS }}
-            columns={RING_COLUMNS}
-            rows={RING_ROWS}
-            alt={`${percent}% context`}
-          />
-        )
+        const { Raster } = $.ui.resolve(e)
+        return <Raster key="context-ring" columns={RING_COLUMNS} rows={RING_ROWS} cells={ring(percent)} />
       }
       const { Svg } = $.ui.resolve(e)
       return <Svg source={ringSvg(percent)} alt={`${percent}% context`} width={104} height={104} />
@@ -250,10 +234,6 @@ export function registerPanel(on: On, ttlMs: number): void {
         <Box flexDirection="row">
           <Box flexDirection="column" alignItems="center">
             {contextRing()}
-            <Text>
-              <Text color={COLORS.text} bold>{`${percent}%`}</Text>
-              <Text color={COLORS.muted}> ctx</Text>
-            </Text>
             <Text>
               <Text color={COLORS.label}>
                 {context?.tokens === undefined ? '–' : formatTokens(context.tokens)}
@@ -315,10 +295,12 @@ export function registerPanel(on: On, ttlMs: number): void {
             const tint = file.isNew ? COLORS.added : COLORS.amber
             const tintBg = file.isNew ? COLORS.addedTint : COLORS.amberTint
             return (
-              <Box key={file.path} flexDirection="row" marginTop={1}>
-                <Text backgroundColor={tintBg} color={tint} bold>
-                  {file.isNew ? ' + ' : ' ~ '}
-                </Text>
+              <Box key={file.path} flexDirection="row" alignItems="flex-start" marginTop={1}>
+                <Box flexShrink={0}>
+                  <Text backgroundColor={tintBg} color={tint} bold>
+                    {file.isNew ? ' + ' : ' ~ '}
+                  </Text>
+                </Box>
                 <Box flexDirection="column" marginLeft={1} flexGrow={1} flexShrink={1}>
                   <Text wrap="truncate-end">
                     <Text color={COLORS.text} bold>
@@ -340,7 +322,7 @@ export function registerPanel(on: On, ttlMs: number): void {
                     </Text>
                   )}
                 </Box>
-                <Box flexDirection="column" alignItems="flex-end" marginLeft={1}>
+                <Box flexDirection="column" alignItems="flex-end" marginLeft={1} flexShrink={0}>
                   <Text>
                     <Text color={COLORS.added}>{`+${file.added}`}</Text>
                     {file.removed > 0 && <Text color={COLORS.removed}>{` −${file.removed}`}</Text>}

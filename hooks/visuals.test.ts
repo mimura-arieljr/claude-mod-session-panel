@@ -1,31 +1,11 @@
 import { expect, test } from 'claude-code/testing'
 
-import { base64, cacheFraction, diffCells, ringPixels, ringSvg, splitPath } from './visuals'
-
-const FILL = [0x4f, 0xd1, 0xc5]
-const TRACK = [0x26, 0x2a, 0x35]
-const BG = [0x1a, 0x1d, 0x24]
-
-function pixel(bytes: Uint8Array, size: number, x: number, y: number): number[] {
-  const i = (y * size + x) * 4
-  return [bytes[i] ?? -1, bytes[i + 1] ?? -1, bytes[i + 2] ?? -1]
-}
+import { base64, cacheFraction, diffCells, ringCells, ringSvg, splitPath } from './visuals'
 
 test('base64 encodes bytes', async () => {
   expect(base64(new Uint8Array([104, 105]))).toBe('aGk=')
   expect(base64(new Uint8Array([1, 2, 3]))).toBe('AQID')
   expect(base64(new Uint8Array([]))).toBe('')
-})
-
-test('the ring fills clockwise from the top', async () => {
-  const size = 96
-  const half = ringPixels(50, size)
-  expect(half).toHaveLength(size * size * 4)
-  expect(pixel(half, size, 48, 5)).toEqual(FILL)
-  expect(pixel(half, size, 90, 48)).toEqual(FILL)
-  expect(pixel(half, size, 47, 91)).toEqual(TRACK)
-  expect(pixel(half, size, 48, 48)).toEqual(BG)
-  expect(pixel(ringPixels(0, size), size, 48, 5)).toEqual(TRACK)
 })
 
 test('diff cells split by share, each side visible when present', async () => {
@@ -57,4 +37,24 @@ test('the svg ring dashes its fill to the percent', async () => {
   expect(svg).toContain('stroke-dasharray="85.7 276.5"')
   expect(svg).toContain('#4FD1C5')
   expect(svg).toContain('>31%<')
+})
+
+// One cell of a Raster: [codePoint, foreground, background].
+function cell(words: Uint32Array, columns: number, x: number, y: number): [number, number, number] {
+  const i = (y * columns + x) * 3
+  return [words[i] ?? 0, words[i + 1] ?? 0, words[i + 2] ?? 0]
+}
+
+test('the braille ring fills clockwise and shows the percent inside', async () => {
+  const words = ringCells(50, 12, 6)
+  expect(words).toHaveLength(12 * 6 * 3)
+  const [topGlyph, topColor] = cell(words, 12, 6, 0)
+  expect(topGlyph).toBeGreaterThan(0x2800)
+  expect(topColor).toBe(0x4fd1c5)
+  const [bottomGlyph, bottomColor] = cell(words, 12, 5, 5)
+  expect(bottomGlyph).toBeGreaterThan(0x2800)
+  expect(bottomColor).toBe(0x262a35)
+  const middle = [4, 5, 6, 7].map(x => String.fromCharCode(cell(words, 12, x, 2)[0])).join('')
+  expect(middle).toContain('50%')
+  expect(cell(words, 12, 0, 0)[2]).toBe(0x1a1d24)
 })

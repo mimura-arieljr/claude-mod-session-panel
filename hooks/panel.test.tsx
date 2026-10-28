@@ -90,7 +90,9 @@ test('usage shows the context ring, work tokens, cost and cache', async ($, on) 
   await clock.advance(8 * 60_000 + 1)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect(JSON.stringify(await ui.drawn())).toContain('14% context')
+    // The terminal draws a braille Raster; other surfaces draw the SVG ring.
+    const drawn = JSON.stringify(await ui.drawn())
+    expect(drawn).toContain(surface === 'terminal' ? '"Raster"' : '14% context')
     expect(await ui.find({ text: /142k \/ 1M/ })).toBeDefined()
     expect(await ui.find({ text: /38\.2k tokens/ })).toBeDefined()
     expect(await ui.find({ text: /\$1\.24/ })).toBeDefined()
