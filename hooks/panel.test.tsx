@@ -92,7 +92,13 @@ test('usage shows the context ring, work tokens, cost and cache', async ($, on) 
     const ui = await $.ui.mount({ ...PANE, surface })
     // The terminal draws a braille Raster; other surfaces draw the SVG ring.
     const drawn = JSON.stringify(await ui.drawn())
-    expect(drawn).toContain(surface === 'terminal' ? '"Raster"' : '14% context')
+    if (surface === 'terminal') {
+      // Plain colored text, not a Raster: the terminal re-quantizes Raster colors.
+      expect(drawn).not.toContain('"Raster"')
+      expect(drawn).toContain('14%')
+    } else {
+      expect(drawn).toContain('14% context')
+    }
     expect(await ui.find({ text: /142k \/ 1M/ })).toBeDefined()
     expect(await ui.find({ text: /38\.2k tokens/ })).toBeDefined()
     expect(await ui.find({ text: /\$1\.24/ })).toBeDefined()

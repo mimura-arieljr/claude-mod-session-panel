@@ -3,7 +3,7 @@ import type { EngineInterface, On, RenderChildren } from 'claude-code'
 import type { SectionId, Todo } from '../types'
 import { cacheStatus, formatTokens, formatUsd, progress, toggleSection } from './model'
 import { changeThread, readNow, readThread, readTurnRunning, setNow } from './thread-state'
-import { cacheFraction, COLORS, diffCells, rasterCells, ringCells, ringSvg, splitPath } from './visuals'
+import { cacheFraction, COLORS, diffCells, ringRows, ringSvg, splitPath } from './visuals'
 
 export const PANE = 'session-panel'
 const TITLE = 'Session'
@@ -26,7 +26,7 @@ const TODO_COLOR: Record<Todo['status'], string> = {
 const PANE_OPEN = { id: PANE, title: TITLE, columns: DOCK_COLUMNS, backgroundColor: COLORS.page }
 
 let tick: { cancel(): void } | undefined
-const rings = new Map<number, string>()
+const rings = new Map<number, ReturnType<typeof ringRows>>()
 
 // Called from session.start: registers the command, opens the pane, starts the minute tick.
 export async function setupPanel($: EngineInterface): Promise<void> {
@@ -42,15 +42,15 @@ function more<T>(list: readonly T[]): { shown: readonly T[]; hidden: number } {
   return { shown: list.slice(0, MAX_ROWS), hidden: Math.max(0, list.length - MAX_ROWS) }
 }
 
-// The ring's raster cells, kept per whole percent.
-function ring(percent: number): string {
+// The ring's text rows, kept per whole percent.
+function ring(percent: number): ReturnType<typeof ringRows> {
   const key = Math.round(percent)
-  let encoded = rings.get(key)
-  if (encoded === undefined) {
-    encoded = rasterCells(ringCells(key, RING_COLUMNS, RING_ROWS))
-    rings.set(key, encoded)
+  let drawn = rings.get(key)
+  if (drawn === undefined) {
+    drawn = ringRows(key, RING_COLUMNS, RING_ROWS)
+    rings.set(key, drawn)
   }
-  return encoded
+  return drawn
 }
 
 // Says where the pane went, and what docks it beside the chat when it didn't.
@@ -223,11 +223,22 @@ export function registerPanel(on: On, ttlMs: number): void {
     const cache = cacheStatus(t.lastReplyAt, at, ttlMs, isTurnRunning)
     const cacheShare = cacheFraction(t.lastReplyAt, at, ttlMs, isTurnRunning)
     const percent = context?.percent ?? 0
-    // The terminal draws a braille ring in cells; desktop, editor and mobile draw the design's SVG.
+    // The terminal draws a braille ring as colored text; desktop, editor and mobile draw the design's SVG.
     const contextRing = () => {
       if (e.surface === 'terminal') {
-        const { Raster } = $.ui.resolve(e)
-        return <Raster key="context-ring" columns={RING_COLUMNS} rows={RING_ROWS} cells={ring(percent)} />
+        return (
+          <Box key="context-ring" flexDirection="column">
+            {ring(percent).map((runs, row) => (
+              <Text key={`ring-${row}`}>
+                {runs.map((run, k) => (
+                  <Text key={`ring-${row}-${k}`} color={run.color}>
+                    {run.text}
+                  </Text>
+                ))}
+              </Text>
+            ))}
+          </Box>
+        )
       }
       const { Svg } = $.ui.resolve(e)
       return <Svg source={ringSvg(percent)} alt={`${percent}% context`} width={104} height={104} />

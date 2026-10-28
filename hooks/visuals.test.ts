@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { base64, cacheFraction, diffCells, ringCells, ringSvg, splitPath } from './visuals'
+import { base64, cacheFraction, diffCells, ringCells, ringRows, ringSvg, splitPath } from './visuals'
 
 test('base64 encodes bytes', async () => {
   expect(base64(new Uint8Array([104, 105]))).toBe('aGk=')
@@ -56,5 +56,15 @@ test('the braille ring fills clockwise and shows the percent inside', async () =
   expect(bottomColor).toBe(0x262a35)
   const middle = [4, 5, 6, 7].map(x => String.fromCharCode(cell(words, 12, x, 2)[0])).join('')
   expect(middle).toContain('50%')
-  expect(cell(words, 12, 0, 0)[2]).toBe(0x191d24)
+})
+
+test('ring rows group cells into colored runs', async () => {
+  const rows = ringRows(50, 12, 6)
+  expect(rows).toHaveLength(6)
+  for (const row of rows) {
+    expect(row.map(run => run.text).join('')).toHaveLength(12)
+    for (let i = 1; i < row.length; i++) expect(row[i]!.color).not.toBe(row[i - 1]!.color)
+  }
+  expect(rows[2]!.map(run => run.text).join('')).toContain('50%')
+  expect(rows[0]!.some(run => run.color === '#4FD1C5')).toBe(true)
 })

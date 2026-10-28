@@ -3,8 +3,6 @@
 export const COLORS = {
   page: '#000000',
   card: '#1A1D24',
-  // The ring's cells: a hair darker so the terminal's palette lands on the card color.
-  ringBg: '#191D24',
   cardBorder: '#2A2F3A',
   raised: '#20242D',
   track: '#262A35',
@@ -111,7 +109,8 @@ export function ringCells(percent: number, columns: number, rows: number): Uint3
   const words = new Uint32Array(columns * rows * 3)
   const fill = hexNumber(COLORS.accent)
   const track = hexNumber(COLORS.track)
-  const bg = hexNumber(COLORS.ringBg)
+  // No background of its own: the ring sits on whatever is behind it.
+  const bg = 0x01000000
   // Braille dots are square on a 1:2 cell, so the ring is round in dot space.
   const width = columns * 2
   const height = rows * 4
@@ -161,10 +160,26 @@ export function ringCells(percent: number, columns: number, rows: number): Uint3
   return words
 }
 
-// Raster cells as the element wants them: little-endian u32s, base64.
-export function rasterCells(words: Uint32Array): string {
-  const bytes = new Uint8Array(words.length * 4)
-  const view = new DataView(bytes.buffer)
-  words.forEach((word, i) => view.setUint32(i * 4, word, true))
-  return base64(bytes)
+// The ring as rows of colored text runs, for drawing with plain Text.
+export function ringRows(
+  percent: number,
+  columns: number,
+  rows: number,
+): { text: string; color: string }[][] {
+  const words = ringCells(percent, columns, rows)
+  const out: { text: string; color: string }[][] = []
+  for (let row = 0; row < rows; row++) {
+    const runs: { text: string; color: string }[] = []
+    for (let col = 0; col < columns; col++) {
+      const i = (row * columns + col) * 3
+      const glyph = String.fromCharCode(words[i] ?? 0x20)
+      const color = `#${(words[i + 1] ?? 0).toString(16).padStart(6, '0').toUpperCase()}`
+      const last = runs[runs.length - 1]
+      // A blank joins the run before it: its color doesn't show.
+      if (last !== undefined && (last.color === color || glyph === ' ')) last.text += glyph
+      else runs.push({ text: glyph, color })
+    }
+    out.push(runs)
+  }
+  return out
 }
