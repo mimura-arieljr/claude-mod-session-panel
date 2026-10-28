@@ -1,0 +1,6 @@
+{
+  "name": "claude-mod-session-panel",
+  "description": "A Claude Code mod: a session panel for checking on long tasks at a glance.",
+  "owner": { "name": "Chock Mimura" },
+  "plugins": [{ "name": "session-panel", "source": "./" }]
+}

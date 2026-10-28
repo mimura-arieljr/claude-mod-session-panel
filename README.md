@@ -12,6 +12,20 @@ Five collapsible cards on a dark `#101317` panel, split by thin cyan lines, each
 
 Totals cover the whole chat thread. `/clear` starts fresh; `/resume` brings a thread's totals back.
 
+## Install
+
+At the prompt of a Claude Code terminal session:
+
+```
+/plugin install session-panel --marketplace mimura-arieljr/claude-mod-session-panel
+```
+
+Answer `y` to add the marketplace, then pick a scope. From a shell:
+
+```sh
+claude plugin install session-panel --marketplace mimura-arieljr/claude-mod-session-panel
+```
+
 ## Use
 
 - The pane opens at session start on terminals 144+ columns wide.
