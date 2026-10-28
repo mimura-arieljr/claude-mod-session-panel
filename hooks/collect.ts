@@ -10,6 +10,7 @@ import {
   applyTodoWrite,
   relativePath,
 } from './model'
+import { saveSnapshot } from './thread'
 import { changeThread } from './thread-state'
 
 type Patch = readonly { lines: readonly string[] }[] | undefined
@@ -68,10 +69,11 @@ export function registerCollectors(on: On): void {
   on('turn.complete', async ($, e, next) => {
     const usage = e.usage
     const at = e.agentId === undefined ? await $.clock.now() : null
-    await changeThread($, t => {
-      const counted = usage === undefined ? t : addUsage(t, usage)
+    const t = await changeThread($, current => {
+      const counted = usage === undefined ? current : addUsage(current, usage)
       return at === null ? counted : { ...counted, lastReplyAt: at }
     })
+    if (at !== null) await saveSnapshot($, t)
     return next(e)
   })
 }
