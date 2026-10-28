@@ -48,30 +48,33 @@ test('all sections start expanded', async ($, on) => {
   engine(on)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    for (const title of ['Progress', 'Usage', 'Files changed', 'Skills & MCPs', 'Assumptions']) {
+    for (const title of ['PROGRESS', 'USAGE', 'FILES CHANGED', 'SKILLS & MCPS', 'ASSUMPTIONS']) {
       expect(await ui.find({ text: new RegExp(`▾ ${title}`) })).toBeDefined()
     }
-    expect(await ui.find({ text: /none yet/ })).toBeDefined()
+    expect(await ui.find({ text: /IDLE/ })).toBeDefined()
+    expect(await ui.find({ text: /Waiting for your next message/ })).toBeDefined()
+    expect(await ui.find({ text: /None yet/ })).toBeDefined()
     await ui.unmount()
   }
 })
 
-test('pressing a title collapses it with a summary', async ($, on) => {
+test('pressing a title collapses it and keeps its summary', async ($, on) => {
   engine(on)
   await $.tool.call({ tool: 'TodoWrite', todos: SIX_TODOS })
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect(await ui.find({ text: /3\/6 · 50%/ })).toBeDefined()
+    expect(await ui.find({ text: /▸ d/ })).toBeDefined()
     await ui.press({ key: 'toggle-progress' })
-    expect(await ui.find({ text: /▸ Progress · 3\/6 · 50%/ })).toBeDefined()
+    expect(await ui.find({ text: /▸ PROGRESS/ })).toBeDefined()
+    expect(await ui.find({ text: /3\/6 · 50%/ })).toBeDefined()
     expect(await ui.find({ text: /▸ d/ })).toBeUndefined()
     await ui.press({ key: 'toggle-progress' })
-    expect(await ui.find({ text: /▾ Progress/ })).toBeDefined()
+    expect(await ui.find({ text: /▾ PROGRESS/ })).toBeDefined()
     await ui.unmount()
   }
 })
 
-test('usage shows work tokens, dollars, context and cache', async ($, on) => {
+test('usage shows the context ring, work tokens, cost and cache', async ($, on) => {
   const clock = engine(on)
   await $.turn.complete({
     ...BASE_TURN,
@@ -87,12 +90,29 @@ test('usage shows work tokens, dollars, context and cache', async ($, on) => {
   await clock.advance(8 * 60_000 + 1)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...PANE, surface })
+    expect(JSON.stringify(await ui.drawn())).toContain('14% context')
+    expect(await ui.find({ text: /142k \/ 1M/ })).toBeDefined()
     expect(await ui.find({ text: /38\.2k tokens/ })).toBeDefined()
     expect(await ui.find({ text: /\$1\.24/ })).toBeDefined()
-    expect(await ui.find({ text: /142k \/ 1M/ })).toBeDefined()
     expect(await ui.find({ text: /warm · 52m left/ })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test('a file row shows its name, tag, folder and counts', async ($, on) => {
+  engine(on)
+  await $.tool.call({
+    tool: 'Edit',
+    file_path: '/r/src/deep/dir/a.ts',
+    old_string: 'a',
+    new_string: 'b',
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /a\.ts/ })).toBeDefined()
+  expect(await ui.find({ text: /EDIT/ })).toBeDefined()
+  expect(await ui.find({ text: /…\/deep\/dir\// })).toBeDefined()
+  expect(await ui.find({ text: /src\/deep\/dir\/a\.ts/ })).toBeUndefined()
+  await ui.unmount()
 })
 
 test('long lists cap at 10', async ($, on) => {
@@ -101,7 +121,7 @@ test('long lists cap at 10', async ($, on) => {
     await $.tool.call({ tool: 'Edit', file_path: `/r/f${i}.ts`, old_string: 'a', new_string: 'b' })
   }
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ text: /Files changed · 13/ })).toBeDefined()
+  expect(await ui.find({ text: /^ 13 $/ })).toBeDefined()
   expect(await ui.find({ text: /\+3 more/ })).toBeDefined()
   expect(await ui.find({ text: /f12\.ts/ })).toBeUndefined()
   await ui.unmount()

@@ -3,19 +3,28 @@ import type { EngineInterface, On, RenderChildren } from 'claude-code'
 import type { SectionId, Todo } from '../types'
 import { cacheStatus, formatTokens, formatUsd, progress, toggleSection } from './model'
 import { changeThread, readNow, readThread, readTurnRunning, setNow } from './thread-state'
+import { base64, cacheFraction, COLORS, diffCells, ringPixels, ringSvg, splitPath } from './visuals'
 
 export const PANE = 'session-panel'
 const TITLE = 'Session'
-const ACCENT = 'promptBorder'
-const EMPTY_BAR = '#0e4f5c'
-const BAR_CELLS = 20
 // Body columns asked of the dock beside the chat.
 const DOCK_COLUMNS = 56
 const DOCK_MIN_TERMINAL = 110
 const MAX_ROWS = 10
+const RING_PIXELS = 96
+const RING_COLUMNS = 12
+const RING_ROWS = 6
+const FILE_BAR_CELLS = 7
+const SUMMARY_SQUARES = 5
 const GLYPH: Record<Todo['status'], string> = { completed: '✓', in_progress: '▸', pending: '○' }
+const TODO_COLOR: Record<Todo['status'], string> = {
+  completed: COLORS.added,
+  in_progress: COLORS.accent,
+  pending: COLORS.muted,
+}
 
 let tick: { cancel(): void } | undefined
+const rings = new Map<number, string>()
 
 // Called from session.start: registers the command, opens the pane, starts the minute tick.
 export async function setupPanel($: EngineInterface): Promise<void> {
@@ -31,6 +40,17 @@ function more<T>(list: readonly T[]): { shown: readonly T[]; hidden: number } {
   return { shown: list.slice(0, MAX_ROWS), hidden: Math.max(0, list.length - MAX_ROWS) }
 }
 
+// The ring's pixels, kept per whole percent.
+function ring(percent: number): string {
+  const key = Math.round(percent)
+  let encoded = rings.get(key)
+  if (encoded === undefined) {
+    encoded = base64(ringPixels(key, RING_PIXELS))
+    rings.set(key, encoded)
+  }
+  return encoded
+}
+
 // Says where the pane went, and what docks it beside the chat when it didn't.
 function placementNote(presentation: { isFullscreen: boolean; columns: number } | undefined): string {
   if (presentation === undefined) return 'Session panel shown.'
@@ -41,10 +61,6 @@ function placementNote(presentation: { isFullscreen: boolean; columns: number } 
     return `Session panel shown above the prompt. Widen the terminal to ${DOCK_MIN_TERMINAL} columns (now ${presentation.columns}) to dock it beside the chat.`
   }
   return 'Session panel shown beside the chat.'
-}
-
-function shortCache(status: string): string {
-  return status.startsWith('warm · ') ? status.slice('warm · '.length).replace(' left', '') : status
 }
 
 export function registerPanel(on: On, ttlMs: number): void {
@@ -69,113 +85,280 @@ export function registerPanel(on: On, ttlMs: number): void {
     await readNow($)
     const at = await $.clock.now()
     const { context, cost } = await $.session.usage()
+    const barCells = Math.max(8, Math.min(28, e.props.bodyColumns - 18))
+
+    const label = (text: string) => (
+      <Text color={COLORS.muted} bold>
+        {text}
+      </Text>
+    )
+    const muted = (text: string) => <Text color={COLORS.muted}>{text}</Text>
+    const bar = (filled: number, total: number, color: string) => (
+      <Text>
+        <Text color={color}>{'━'.repeat(filled)}</Text>
+        <Text color={COLORS.track}>{'━'.repeat(Math.max(0, total - filled))}</Text>
+      </Text>
+    )
+    const moreRow = (hidden: number) => hidden > 0 && muted(`+${hidden} more`)
+    const empty = (hint: string) => (
+      <Box flexDirection="column" borderStyle="round" borderColor={COLORS.dashed} paddingX={1}>
+        <Text color={COLORS.textMid} bold>
+          None yet
+        </Text>
+        {muted(hint)}
+      </Box>
+    )
 
     const section = (
       id: SectionId,
       title: string,
-      summary: string,
+      badge: RenderChildren,
+      right: RenderChildren,
       body: () => RenderChildren,
     ) => {
       const isCollapsed = t.collapsed.includes(id)
-      const label = `${isCollapsed ? '▸' : '▾'} ${title}${isCollapsed && summary !== '' ? ` · ${summary}` : ''}`
       return (
-        <Box key={id} flexDirection="column" borderStyle="round" borderColor={ACCENT} paddingX={1}>
-          <Button
-            plain
-            key={`toggle-${id}`}
-            onPress={() => {
-              void changeThread($, current => toggleSection(current, id))
-            }}
-          >
-            <Text color={ACCENT} bold>
-              {label}
-            </Text>
-          </Button>
+        <Box
+          key={id}
+          flexDirection="column"
+          backgroundColor={COLORS.card}
+          borderStyle="round"
+          borderColor={COLORS.cardBorder}
+          paddingX={1}
+        >
+          <Box flexDirection="row" justifyContent="space-between">
+            <Button
+              plain
+              key={`toggle-${id}`}
+              onPress={() => {
+                void changeThread($, current => toggleSection(current, id))
+              }}
+            >
+              <Text color={COLORS.muted}>{isCollapsed ? '▸ ' : '▾ '}</Text>
+              <Text color={COLORS.label} bold>
+                {title}
+              </Text>
+              {badge}
+            </Button>
+            {right}
+          </Box>
           {!isCollapsed && body()}
         </Box>
       )
     }
 
-    const dimRow = (text: string) => <Text dimColor>{text}</Text>
-    const moreRow = (hidden: number) => hidden > 0 && dimRow(`+${hidden} more`)
+    // Header: name and a WORKING / IDLE pill.
+    const header = (
+      <Box flexDirection="row" justifyContent="space-between" paddingX={1}>
+        <Text>
+          <Text color={COLORS.accent} bold>
+            {'❯_ '}
+          </Text>
+          <Text color={COLORS.text} bold>
+            {TITLE}
+          </Text>
+        </Text>
+        {isTurnRunning ? (
+          <Text backgroundColor={COLORS.accentTint} color={COLORS.accentSoft} bold>
+            <Text color={COLORS.accent}>{' ● '}</Text>
+            {'WORKING '}
+          </Text>
+        ) : (
+          <Text backgroundColor={COLORS.idleTint} color={COLORS.label} bold>
+            <Text color={COLORS.muted}>{' ● '}</Text>
+            {'IDLE '}
+          </Text>
+        )}
+      </Box>
+    )
 
+    // Progress
     const p = progress(t)
+    const current = t.todos.find(todo => todo.status === 'in_progress')
     const progressBody = () => {
-      if (p === null) return dimRow(isTurnRunning ? 'working' : 'idle')
-      const filled = Math.round(p.percent / (100 / BAR_CELLS))
       const { shown, hidden } = more(t.todos)
       return (
         <Box flexDirection="column">
-          <Text>
-            <Text color={ACCENT}>{'█'.repeat(filled)}</Text>
-            <Text color={EMPTY_BAR}>{'█'.repeat(BAR_CELLS - filled)}</Text>
-            <Text color={ACCENT}>{`  ${p.done}/${p.total} · ${p.percent}%`}</Text>
-          </Text>
-          {shown.map(todo =>
-            todo.status === 'in_progress' ? (
-              <Text color={ACCENT}>{`${GLYPH[todo.status]} ${todo.text}`}</Text>
-            ) : todo.status === 'pending' ? (
-              dimRow(`${GLYPH[todo.status]} ${todo.text}`)
-            ) : (
-              <Text>
-                <Text color="success">{GLYPH[todo.status]}</Text>
-                {` ${todo.text}`}
+          <Box flexDirection="row">
+            {isTurnRunning ? (
+              <Text backgroundColor={COLORS.accentTint} color={COLORS.accent} bold>
+                {' ✳ '}
               </Text>
-            ),
+            ) : (
+              <Text backgroundColor={COLORS.idleTint} color={COLORS.label} bold>
+                {' ⏸ '}
+              </Text>
+            )}
+            <Box flexDirection="column" marginLeft={1} flexShrink={1}>
+              <Text color={COLORS.text} bold>
+                {isTurnRunning ? 'Working' : 'Idle'}
+              </Text>
+              {muted(
+                isTurnRunning ? (current?.text ?? 'Thinking…') : 'Waiting for your next message',
+              )}
+            </Box>
+          </Box>
+          {p !== null && (
+            <Box flexDirection="column" marginTop={1}>
+              <Text>
+                {bar(Math.round((p.percent / 100) * barCells), barCells, COLORS.accent)}
+                <Text color={COLORS.label}>{`  ${p.done}/${p.total} · ${p.percent}%`}</Text>
+              </Text>
+              {shown.map(todo => (
+                <Text key={`todo-${todo.id}`}>
+                  <Text color={TODO_COLOR[todo.status]}>{`${GLYPH[todo.status]} `}</Text>
+                  <Text color={todo.status === 'pending' ? COLORS.muted : COLORS.textMid}>
+                    {todo.text}
+                  </Text>
+                </Text>
+              ))}
+              {moreRow(hidden)}
+            </Box>
           )}
-          {moreRow(hidden)}
         </Box>
       )
     }
+    const progressRight = muted(
+      p !== null ? `${p.done}/${p.total} · ${p.percent}%` : isTurnRunning ? 'running' : 'idle',
+    )
 
+    // Usage
     const work = formatTokens(t.work.input + t.work.output)
     const usd = formatUsd(cost?.usd ?? 0)
     const cache = cacheStatus(t.lastReplyAt, at, ttlMs, isTurnRunning)
+    const cacheShare = cacheFraction(t.lastReplyAt, at, ttlMs, isTurnRunning)
+    const percent = context?.percent ?? 0
+    // The terminal draws pixels; desktop, editor and mobile draw the design's SVG.
+    const contextRing = () => {
+      if (e.surface === 'terminal') {
+        const { Image } = $.ui.resolve(e)
+        return (
+          <Image
+            key="context-ring"
+            source={{ rgba: ring(percent), width: RING_PIXELS, height: RING_PIXELS }}
+            columns={RING_COLUMNS}
+            rows={RING_ROWS}
+            alt={`${percent}% context`}
+          />
+        )
+      }
+      const { Svg } = $.ui.resolve(e)
+      return <Svg source={ringSvg(percent)} alt={`${percent}% context`} width={104} height={104} />
+    }
     const usageBody = () => (
       <Box flexDirection="column">
-        <Text>{`Work     ${work} tokens  ·  ${usd}`}</Text>
-        <Text>
-          {context?.tokens === undefined
-            ? 'Context  –'
-            : `Context  ${formatTokens(context.tokens)} / ${formatTokens(context.window)}  ·  ${context.percent ?? 0}%`}
-        </Text>
-        <Text>
-          {'Cache    '}
-          <Text color={cache === 'cold' ? 'warning' : undefined}>{cache}</Text>
-        </Text>
-        {t.isTrackingSinceResume && dimRow('tracking since resume')}
+        <Box flexDirection="row">
+          <Box flexDirection="column" alignItems="center">
+            {contextRing()}
+            <Text>
+              <Text color={COLORS.text} bold>{`${percent}%`}</Text>
+              <Text color={COLORS.muted}> ctx</Text>
+            </Text>
+            <Text>
+              <Text color={COLORS.label}>
+                {context?.tokens === undefined ? '–' : formatTokens(context.tokens)}
+              </Text>
+              <Text color={COLORS.muted}>{` / ${formatTokens(context?.window ?? 0)}`}</Text>
+            </Text>
+          </Box>
+          <Box flexDirection="column" marginLeft={2} flexGrow={1}>
+            {label('WORK')}
+            <Text>
+              <Text color={COLORS.text} bold>
+                {work}
+              </Text>
+              <Text color={COLORS.muted}> tokens</Text>
+            </Text>
+            <Box marginTop={1}>{label('COST')}</Box>
+            <Text color={COLORS.text} bold>
+              {usd}
+            </Text>
+            <Box marginTop={1} flexDirection="row" justifyContent="space-between">
+              {label('CACHE')}
+              <Text color={COLORS.amber}>{cache}</Text>
+            </Box>
+            {bar(Math.round(cacheShare * barCells), barCells, COLORS.amber)}
+          </Box>
+        </Box>
+        {t.isTrackingSinceResume && muted('tracking since resume')}
       </Box>
     )
-    const usageSummary = [
-      work,
-      usd,
-      context?.percent === undefined ? null : `ctx ${context.percent}%`,
-      `cache ${shortCache(cache)}`,
-    ]
-      .filter(part => part !== null)
-      .join(' · ')
 
+    // Files changed
+    const added = t.files.reduce((sum, file) => sum + file.added, 0)
+    const removed = t.files.reduce((sum, file) => sum + file.removed, 0)
+    const squares = diffCells(added, removed, SUMMARY_SQUARES)
+    const filesBadge = (
+      <Text backgroundColor={COLORS.badge} color={COLORS.text} bold>
+        {` ${t.files.length} `}
+      </Text>
+    )
+    const filesRight =
+      t.files.length === 0 ? (
+        muted('0')
+      ) : (
+        <Text>
+          <Text color={COLORS.added}>{`+${added}`}</Text>
+          <Text color={COLORS.removed}>{` −${removed} `}</Text>
+          <Text color={COLORS.added}>{'■'.repeat(squares.plus)}</Text>
+          <Text color={COLORS.removed}>{'■'.repeat(squares.minus)}</Text>
+        </Text>
+      )
     const filesBody = () => {
-      if (t.files.length === 0) return dimRow('none yet')
+      if (t.files.length === 0) return empty('Files Claude edits appear here.')
       const { shown, hidden } = more(t.files)
       return (
         <Box flexDirection="column">
-          {shown.map(file => (
-            <Box key={file.path} flexDirection="column">
-              <Text>
-                {`${file.path}  `}
-                {file.isNew && <Text color="diffAdded">new </Text>}
-                <Text color="diffAdded">{`+${file.added}`}</Text>
-                {!file.isNew && <Text color="diffRemoved">{` −${file.removed}`}</Text>}
-              </Text>
-              {file.notes.length > 0 && dimRow(`  · ${file.notes.join('  · ')}`)}
-            </Box>
-          ))}
+          {shown.map(file => {
+            const { name, dir } = splitPath(file.path)
+            const cells = diffCells(file.added, file.removed, FILE_BAR_CELLS)
+            const tint = file.isNew ? COLORS.added : COLORS.amber
+            const tintBg = file.isNew ? COLORS.addedTint : COLORS.amberTint
+            return (
+              <Box key={file.path} flexDirection="row" marginTop={1}>
+                <Text backgroundColor={tintBg} color={tint} bold>
+                  {file.isNew ? ' + ' : ' ~ '}
+                </Text>
+                <Box flexDirection="column" marginLeft={1} flexGrow={1} flexShrink={1}>
+                  <Text wrap="truncate-end">
+                    <Text color={COLORS.text} bold>
+                      {name}
+                    </Text>{' '}
+                    <Text backgroundColor={tintBg} color={tint} bold>
+                      {file.isNew ? ' NEW ' : ' EDIT '}
+                    </Text>
+                  </Text>
+                  {dir !== '' && (
+                    <Text color={COLORS.muted} wrap="truncate-start">
+                      {dir}
+                    </Text>
+                  )}
+                  {file.notes.length > 0 && (
+                    <Text color={COLORS.textMid} wrap="truncate-end">
+                      <Text color={COLORS.muted}>{'› '}</Text>
+                      {file.notes.join(' · ')}
+                    </Text>
+                  )}
+                </Box>
+                <Box flexDirection="column" alignItems="flex-end" marginLeft={1}>
+                  <Text>
+                    <Text color={COLORS.added}>{`+${file.added}`}</Text>
+                    {file.removed > 0 && <Text color={COLORS.removed}>{` −${file.removed}`}</Text>}
+                  </Text>
+                  <Text>
+                    <Text color={COLORS.added}>{'▬'.repeat(cells.plus)}</Text>
+                    <Text color={COLORS.removed}>{'▬'.repeat(cells.minus)}</Text>
+                  </Text>
+                </Box>
+              </Box>
+            )
+          })}
           {moreRow(hidden)}
         </Box>
       )
     }
 
+    // Skills & MCPs
     const toolRows = [
       ...t.skills.map(skill => ({ kind: 'skill', text: skill.name, count: skill.count })),
       ...t.mcps.map(mcp => ({
@@ -184,33 +367,55 @@ export function registerPanel(on: On, ttlMs: number): void {
         count: mcp.count,
       })),
     ]
+    const toolUses = toolRows.reduce((sum, row) => sum + row.count, 0)
     const toolsBody = () => {
-      if (toolRows.length === 0) return dimRow('none yet')
+      if (toolRows.length === 0) return empty("Skills and MCP tools appear here as they're called.")
       const { shown, hidden } = more(toolRows)
       return (
         <Box flexDirection="column">
           {shown.map(row => (
-            <Text>
-              <Text dimColor>{`${row.kind}  `}</Text>
-              {`${row.text}  ×${row.count}`}
-            </Text>
+            <Box key={`${row.kind}-${row.text}`} flexDirection="row" justifyContent="space-between">
+              <Text wrap="truncate-end">
+                <Text color={COLORS.muted}>{`${row.kind}  `}</Text>
+                <Text color={COLORS.text}>{row.text}</Text>
+              </Text>
+              <Text color={COLORS.label}>{`×${row.count}`}</Text>
+            </Box>
           ))}
           {moreRow(hidden)}
         </Box>
       )
     }
-    const toolsSummary = `${t.skills.length} skill${t.skills.length === 1 ? '' : 's'} · ${t.mcps.length} MCP${t.mcps.length === 1 ? '' : 's'}`
 
+    // Assumptions
+    const assumptionsBadge = (
+      <Text backgroundColor={COLORS.amberTint} color={COLORS.amber} bold>
+        {` ${t.assumptions.length} `}
+      </Text>
+    )
     const assumptionsBody = () => {
-      if (t.assumptions.length === 0) return dimRow('none yet')
+      if (t.assumptions.length === 0) return empty('Things Claude assumes appear here.')
       const { shown, hidden } = more(t.assumptions)
       return (
         <Box flexDirection="column">
-          {shown.map(a => (
-            <Text>
-              {a.isFromAgent && <Text dimColor>(agent) </Text>}
-              {a.text}
-            </Text>
+          {shown.map((a, i) => (
+            <Box
+              key={`assumption-${a.at}-${i}`}
+              flexDirection="row"
+              backgroundColor={COLORS.raised}
+              paddingX={1}
+              marginTop={i === 0 ? 0 : 1}
+            >
+              <Text color={COLORS.amber} bold>
+                {String(t.assumptions.length - i).padStart(2, '0')}
+              </Text>
+              <Box marginLeft={1} flexShrink={1}>
+                <Text color={COLORS.textSoft}>
+                  {a.isFromAgent && <Text color={COLORS.muted}>(agent) </Text>}
+                  {a.text}
+                </Text>
+              </Box>
+            </Box>
           ))}
           {moreRow(hidden)}
         </Box>
@@ -218,12 +423,13 @@ export function registerPanel(on: On, ttlMs: number): void {
     }
 
     return (
-      <Box flexDirection="column">
-        {section('progress', 'Progress', p === null ? '' : `${p.done}/${p.total} · ${p.percent}%`, progressBody)}
-        {section('usage', 'Usage', usageSummary, usageBody)}
-        {section('files', `Files changed · ${t.files.length}`, '', filesBody)}
-        {section('tools', 'Skills & MCPs', toolsSummary, toolsBody)}
-        {section('assumptions', 'Assumptions', String(t.assumptions.length), assumptionsBody)}
+      <Box flexDirection="column" backgroundColor={COLORS.page} gap={1}>
+        {header}
+        {section('progress', 'PROGRESS', null, progressRight, progressBody)}
+        {section('usage', 'USAGE', null, muted(usd), usageBody)}
+        {section('files', 'FILES CHANGED ', filesBadge, filesRight, filesBody)}
+        {section('tools', 'SKILLS & MCPS', null, muted(String(toolUses)), toolsBody)}
+        {section('assumptions', 'ASSUMPTIONS ', assumptionsBadge, null, assumptionsBody)}
       </Box>
     )
   })

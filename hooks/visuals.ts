@@ -1,0 +1,130 @@
+// Drawing helpers for the panel's look: the context ring, diff bars, short paths.
+
+export const COLORS = {
+  page: '#111318',
+  card: '#1A1D24',
+  cardBorder: '#2A2F3A',
+  raised: '#20242D',
+  track: '#262A35',
+  badge: '#262A35',
+  dashed: '#343A47',
+  accent: '#4FD1C5',
+  accentSoft: '#8FE9E0',
+  // accent at 12% over the card
+  accentTint: '#203337',
+  amber: '#E6B866',
+  // amber at 16% over the card
+  amberTint: '#3B362F',
+  added: '#6EE7A0',
+  // added at 16% over the card
+  addedTint: '#273D38',
+  removed: '#FF8A7A',
+  text: '#E6E8EC',
+  textSoft: '#D5D9E0',
+  textMid: '#C3C8D1',
+  label: '#AEB4BF',
+  muted: '#8B93A1',
+  idleTint: '#232733',
+} as const
+
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+
+export function base64(bytes: Uint8Array): string {
+  let out = ''
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i] ?? 0
+    const b = bytes[i + 1] ?? 0
+    const c = bytes[i + 2] ?? 0
+    const n = (a << 16) | (b << 8) | c
+    out += B64[(n >> 18) & 63]! + B64[(n >> 12) & 63]!
+    out += i + 1 < bytes.length ? B64[(n >> 6) & 63]! : '='
+    out += i + 2 < bytes.length ? B64[n & 63]! : '='
+  }
+  return out
+}
+
+function rgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+function clamp01(n: number): number {
+  return Math.min(1, Math.max(0, n))
+}
+
+// RGBA pixels of a ring, filled clockwise from 12 o'clock to `percent`, on the card color.
+export function ringPixels(percent: number, size: number): Uint8Array {
+  const bytes = new Uint8Array(size * size * 4)
+  const fill = rgb(COLORS.accent)
+  const track = rgb(COLORS.track)
+  const bg = rgb(COLORS.card)
+  const center = size / 2
+  const outer = size / 2 - 2
+  const inner = outer - (size * 9) / 104
+  const share = clamp01(percent / 100)
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x + 0.5 - center
+      const dy = y + 0.5 - center
+      const d = Math.sqrt(dx * dx + dy * dy)
+      const coverage = clamp01(outer + 0.5 - d) * clamp01(d - (inner - 0.5))
+      let angle = Math.atan2(dx, -dy)
+      if (angle < 0) angle += 2 * Math.PI
+      const ink = angle / (2 * Math.PI) < share ? fill : track
+      const i = (y * size + x) * 4
+      for (let k = 0; k < 3; k++) {
+        bytes[i + k] = Math.round(bg[k]! + (ink[k]! - bg[k]!) * coverage)
+      }
+      bytes[i + 3] = 255
+    }
+  }
+  return bytes
+}
+
+// How many of `cells` go to added and removed lines, each side shown when present.
+export function diffCells(added: number, removed: number, cells: number): { plus: number; minus: number } {
+  const total = added + removed
+  if (total === 0) return { plus: 0, minus: 0 }
+  let plus = Math.round((added / total) * cells)
+  if (removed > 0 && plus === cells) plus = cells - 1
+  if (added > 0 && plus === 0) plus = 1
+  return { plus, minus: cells - plus }
+}
+
+// A file's name and its folder, the folder cut to its last two parts.
+export function splitPath(path: string): { name: string; dir: string } {
+  const parts = path.split('/')
+  const name = parts[parts.length - 1] ?? path
+  const dirs = parts.slice(0, -1).filter(part => part !== '')
+  if (dirs.length === 0) return { name, dir: '' }
+  if (dirs.length <= 2) return { name, dir: `${dirs.join('/')}/` }
+  return { name, dir: `…/${dirs.slice(-2).join('/')}/` }
+}
+
+// What share of the cache lifetime is left: 1 while a turn runs, 0 when cold or unknown.
+export function cacheFraction(
+  lastReplyAt: number | null,
+  now: number,
+  ttlMs: number,
+  isTurnRunning: boolean,
+): number {
+  if (isTurnRunning) return 1
+  if (lastReplyAt === null) return 0
+  return clamp01((lastReplyAt + ttlMs - now) / ttlMs)
+}
+
+// The design's ring as SVG, for surfaces that draw SVG (desktop, editor, mobile).
+export function ringSvg(percent: number): string {
+  const share = clamp01(percent / 100)
+  const circumference = 2 * Math.PI * 44
+  const dash = `${(share * circumference).toFixed(1)} ${circumference.toFixed(1)}`
+  return [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="104" height="104" viewBox="0 0 104 104">',
+    `<circle cx="52" cy="52" r="44" fill="none" stroke="${COLORS.track}" stroke-width="9"/>`,
+    `<circle cx="52" cy="52" r="44" fill="none" stroke="${COLORS.accent}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${dash}" transform="rotate(-90 52 52)"/>`,
+    `<text x="52" y="52" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="22" font-weight="700" fill="${COLORS.text}">${Math.round(percent)}%</text>`,
+    `<text x="52" y="70" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" letter-spacing="0.8" fill="${COLORS.muted}">CONTEXT</text>`,
+    '</svg>',
+  ].join('')
+}
