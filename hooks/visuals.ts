@@ -1,7 +1,8 @@
 // Drawing helpers for the panel's look: the context ring, diff bars, short paths.
 
 export const COLORS = {
-  page: '#000000',
+  // Matches the frame Claude Code draws around the pane.
+  page: '#262626',
   card: '#1A1D24',
   cardBorder: '#2A2F3A',
   raised: '#20242D',
