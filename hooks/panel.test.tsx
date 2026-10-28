@@ -224,3 +224,12 @@ test('sections are borderless cards split by cyan lines', async ($, on) => {
   expect(drawn).toContain('"color":"#4FD1C5"},"children":["────')
   await ui.unmount()
 })
+
+test('the idle pill uses the design colors', async ($, on) => {
+  engine(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const drawn = JSON.stringify(await ui.drawn())
+  expect(drawn).toContain('"backgroundColor":"#1C2029","color":"#AEB4BF"')
+  expect(await ui.find({ text: /● IDLE/ })).toBeDefined()
+  await ui.unmount()
+})

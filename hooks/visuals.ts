@@ -26,6 +26,9 @@ export const COLORS = {
   label: '#AEB4BF',
   muted: '#8B93A1',
   idleTint: '#232733',
+  // The header pill, from the design: idle fill, and the accent at 12% over the page.
+  pillIdle: '#1C2029',
+  pillWorking: '#182A2C',
 } as const
 
 function clamp01(n: number): number {

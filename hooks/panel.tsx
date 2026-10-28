@@ -160,17 +160,19 @@ export function registerPanel(on: On, ttlMs: number): void {
             {TITLE}
           </Text>
         </Text>
-        {isTurnRunning ? (
-          <Text backgroundColor={COLORS.accentTint} color={COLORS.accentSoft} bold>
-            <Text color={COLORS.accent}>{' ● '}</Text>
-            {'WORKING '}
-          </Text>
-        ) : (
-          <Text backgroundColor={COLORS.idleTint} color={COLORS.label} bold>
-            <Text color={COLORS.muted}>{' ● '}</Text>
-            {'IDLE '}
-          </Text>
-        )}
+        <Box marginRight={1}>
+          {isTurnRunning ? (
+            <Text backgroundColor={COLORS.pillWorking} color={COLORS.accentSoft} bold>
+              <Text color={COLORS.accent}>{' ● '}</Text>
+              {'WORKING '}
+            </Text>
+          ) : (
+            <Text backgroundColor={COLORS.pillIdle} color={COLORS.label} bold>
+              <Text color={COLORS.muted}>{' ● '}</Text>
+              {'IDLE '}
+            </Text>
+          )}
+        </Box>
       </Box>
     )
 
