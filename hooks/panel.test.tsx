@@ -215,11 +215,12 @@ test('the pane opens on a near-black body', async ($, on) => {
   expect(opened).toEqual([expect.objectContaining({ backgroundColor: '#101317' })])
 })
 
-test('every section sits in a rounded bordered card', async ($, on) => {
+test('sections are borderless cards split by cyan lines', async ($, on) => {
   engine(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const drawn = JSON.stringify(await ui.drawn())
-  const cards = drawn.match(/"backgroundColor":"#1A1D24","borderStyle":"round","borderColor":"#2A2F3A"/g) ?? []
-  expect(cards).toHaveLength(5)
+  expect(drawn).not.toContain('"borderStyle":"round","borderColor":"#2A2F3A"')
+  expect(drawn.match(/"key":"divider-\d"/g) ?? []).toHaveLength(4)
+  expect(drawn).toContain('"color":"#4FD1C5"},"children":["────')
   await ui.unmount()
 })

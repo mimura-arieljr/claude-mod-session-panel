@@ -120,14 +120,7 @@ export function registerPanel(on: On, ttlMs: number): void {
     ) => {
       const isCollapsed = t.collapsed.includes(id)
       return (
-        <Box
-          key={id}
-          flexDirection="column"
-          backgroundColor={COLORS.card}
-          borderStyle="round"
-          borderColor={COLORS.cardBorder}
-          paddingX={1}
-        >
+        <Box key={id} flexDirection="column" backgroundColor={COLORS.card} paddingX={1} paddingY={1}>
           <Box flexDirection="row" justifyContent="space-between">
             <Button
               plain
@@ -148,6 +141,13 @@ export function registerPanel(on: On, ttlMs: number): void {
         </Box>
       )
     }
+
+    // A thin cyan line between sections.
+    const divider = (n: number) => (
+      <Box key={`divider-${n}`}>
+        <Text color={COLORS.accent}>{'─'.repeat(e.props.bodyColumns)}</Text>
+      </Box>
+    )
 
     // Header: name and a WORKING / IDLE pill.
     const header = (
@@ -426,17 +426,16 @@ export function registerPanel(on: On, ttlMs: number): void {
     }
 
     return (
-      <Box
-        flexDirection="column"
-        backgroundColor={COLORS.page}
-        gap={1}
-        minHeight={e.props.scroll.bodyRows}
-      >
-        {header}
+      <Box flexDirection="column" backgroundColor={COLORS.page} minHeight={e.props.scroll.bodyRows}>
+        <Box marginBottom={1}>{header}</Box>
         {section('progress', 'PROGRESS', null, progressRight, progressBody)}
+        {divider(0)}
         {section('usage', 'USAGE', null, muted(usd), usageBody)}
+        {divider(1)}
         {section('files', 'FILES CHANGED ', filesBadge, filesRight, filesBody)}
+        {divider(2)}
         {section('tools', 'SKILLS & MCPS', null, muted(String(toolUses)), toolsBody)}
+        {divider(3)}
         {section('assumptions', 'ASSUMPTIONS ', assumptionsBadge, null, assumptionsBody)}
       </Box>
     )
