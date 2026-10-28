@@ -4,7 +4,8 @@ import { addAssumption } from './model'
 import { changeThread } from './thread-state'
 
 export const ASSUMPTION_SECTION_ID = 'session-panel:assumptions'
-const TOOL = 'mcp__session-panel__note_assumption'
+// A pattern: the engine's generated tool list predates the mod's own tool.
+const TOOL = /^mcp__session-panel__note_assumption$/
 const MAX_LENGTH = 200
 
 const INSTRUCTION =
@@ -27,7 +28,7 @@ export async function registerAssumptionTool($: EngineInterface): Promise<void> 
 
 export function registerAssumptions(on: On): void {
   on('tool.call', { tool: TOOL }, async ($, e) => {
-    const text = String(e.assumption ?? '').slice(0, MAX_LENGTH)
+    const text = String((e as { assumption?: unknown }).assumption ?? '').slice(0, MAX_LENGTH)
     const at = await $.clock.now()
     await changeThread($, t => addAssumption(t, { text, isFromAgent: e.agentId !== undefined, at }))
     return { result: 'noted' }

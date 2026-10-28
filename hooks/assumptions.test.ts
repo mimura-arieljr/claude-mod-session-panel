@@ -1,3 +1,4 @@
+import type { Engine } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 
 import { ASSUMPTION_SECTION_ID } from './assumptions'
@@ -5,12 +6,17 @@ import { watchThread } from './test-support'
 
 const TOOL = 'mcp__session-panel__note_assumption'
 
+// The engine's generated tool list doesn't declare the mod's own tool.
+function note($: Engine, input: Record<string, unknown>) {
+  return $.tool.call({ tool: TOOL, ...input } as never)
+}
+
 test('a noted assumption reaches the thread, newest first', async ($, on) => {
   const thread = watchThread(on)
   mock.clock(on, { now: 42 })
   on('tool.call', () => ({ result: {} }))
-  const first = await $.tool.call({ tool: TOOL, assumption: 'Tests use vitest' })
-  await $.tool.call({ tool: TOOL, assumption: 'Config lives in src/' })
+  const first = await note($, { assumption: 'Tests use vitest' })
+  await note($, { assumption: 'Config lives in src/' })
   expect(first.result).toBe('noted')
   expect(thread().assumptions).toEqual([
     { text: 'Config lives in src/', isFromAgent: false, at: 42 },
@@ -22,7 +28,7 @@ test("a subagent's assumption is marked", async ($, on) => {
   const thread = watchThread(on)
   mock.clock(on)
   on('tool.call', () => ({ result: {} }))
-  await $.tool.call({ tool: TOOL, assumption: 'x', agentId: 'a1' })
+  await note($, { assumption: 'x', agentId: 'a1' })
   expect(thread().assumptions[0]?.isFromAgent).toBe(true)
 })
 
