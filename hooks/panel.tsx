@@ -22,13 +22,16 @@ const TODO_COLOR: Record<Todo['status'], string> = {
   pending: COLORS.muted,
 }
 
+// The engine draws the frame (close row, edges); this paints the body under it.
+const PANE_OPEN = { id: PANE, title: TITLE, columns: DOCK_COLUMNS, backgroundColor: COLORS.page }
+
 let tick: { cancel(): void } | undefined
 const rings = new Map<number, string>()
 
 // Called from session.start: registers the command, opens the pane, starts the minute tick.
 export async function setupPanel($: EngineInterface): Promise<void> {
   await $.command.register({ name: 'session-panel', description: 'Show or hide the session panel' })
-  void $.ui.open({ id: PANE, title: TITLE, columns: DOCK_COLUMNS })
+  void $.ui.open(PANE_OPEN)
   tick?.cancel()
   tick = $.clock.every(60_000, async () => {
     await setNow($, await $.clock.now())
@@ -72,7 +75,7 @@ export function registerPanel(on: On, ttlMs: number): void {
       await $.ui.close({ id: PANE })
       return { text: 'Session panel hidden.' }
     }
-    await $.ui.open({ id: PANE, title: TITLE, columns: DOCK_COLUMNS })
+    await $.ui.open(PANE_OPEN)
     return { text: placementNote(e.presentation) }
   })
 

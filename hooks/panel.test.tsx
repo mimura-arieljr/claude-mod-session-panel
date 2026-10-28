@@ -196,3 +196,15 @@ test('the panel fills its pane in black', async ($, on) => {
   expect(root.props?.minHeight).toBe(80)
   await ui.unmount()
 })
+
+test('the pane opens on a black body', async ($, on) => {
+  engine(on)
+  const opened: unknown[] = []
+  on('ui.panes', () => ({ value: [] }))
+  on('ui.open', (_, e) => {
+    opened.push(e)
+    return { value: { isPlaced: true } }
+  })
+  await $.command.run({ command: 'session-panel', args: '' } as never)
+  expect(opened).toEqual([expect.objectContaining({ backgroundColor: '#000000' })])
+})
