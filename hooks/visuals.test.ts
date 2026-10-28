@@ -1,12 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { base64, cacheFraction, diffCells, ringCells, ringRows, ringSvg, splitPath } from './visuals'
-
-test('base64 encodes bytes', async () => {
-  expect(base64(new Uint8Array([104, 105]))).toBe('aGk=')
-  expect(base64(new Uint8Array([1, 2, 3]))).toBe('AQID')
-  expect(base64(new Uint8Array([]))).toBe('')
-})
+import { cacheFraction, diffCells, ringCells, ringRows, ringSvg, splitPath } from './visuals'
 
 test('diff cells split by share, each side visible when present', async () => {
   expect(diffCells(5, 0, 7)).toEqual({ plus: 7, minus: 0 })

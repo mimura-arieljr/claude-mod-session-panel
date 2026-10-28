@@ -27,22 +27,6 @@ export const COLORS = {
   idleTint: '#232733',
 } as const
 
-const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-
-export function base64(bytes: Uint8Array): string {
-  let out = ''
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i] ?? 0
-    const b = bytes[i + 1] ?? 0
-    const c = bytes[i + 2] ?? 0
-    const n = (a << 16) | (b << 8) | c
-    out += B64[(n >> 18) & 63]! + B64[(n >> 12) & 63]!
-    out += i + 1 < bytes.length ? B64[(n >> 6) & 63]! : '='
-    out += i + 2 < bytes.length ? B64[n & 63]! : '='
-  }
-  return out
-}
-
 function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n))
 }
