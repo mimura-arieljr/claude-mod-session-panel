@@ -19,6 +19,14 @@ Totals cover the whole chat thread. `/clear` starts fresh; `/resume` brings a th
 - It docks beside the chat in fullscreen layout (`"tui": "fullscreen"`) on terminals 110+ columns wide; otherwise it sits above the prompt.
 - Click a section title (or Tab to it and press Enter) to collapse or expand it.
 
+## Black frame
+
+Claude Code paints the frame around a docked pane with the theme color `composerSidebarBackground` (`#262626` in the dark theme). To make the frame black like the panel, add it to your custom theme's overrides, for example `~/.claude/themes/<name>.json`:
+
+```json
+"overrides": { "composerSidebarBackground": "#000000" }
+```
+
 ## Options
 
 - `cacheTtl`: `60m` (default) or `5m`, the prompt-cache lifetime the countdown uses. Claude Code doesn't tell mods this value, so set it to match your setup.
