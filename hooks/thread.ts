@@ -58,11 +58,6 @@ export function registerThread(on: On): void {
     return next(e)
   })
 
-  on('session.start', async ($, e, next) => {
-    await syncThread($)
-    return next(e)
-  })
-
   on('session.end', async ($, e, next) => {
     await saveSnapshot($, await readThread($))
     if (e.reason === 'clear' || e.reason === 'resume') {
