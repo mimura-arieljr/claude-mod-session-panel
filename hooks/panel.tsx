@@ -1,4 +1,4 @@
-import type { EngineInterface, On } from 'claude-code'
+import type { EngineInterface, On, RenderChildren } from 'claude-code'
 
 import type { SectionId, Todo } from '../types'
 import { cacheStatus, formatTokens, formatUsd, progress, toggleSection } from './model'
@@ -57,7 +57,7 @@ export function registerPanel(on: On, ttlMs: number): void {
       hotkey: string,
       title: string,
       summary: string,
-      body: () => unknown,
+      body: () => RenderChildren,
     ) => {
       const isCollapsed = t.collapsed.includes(id)
       const label = `${isCollapsed ? '▸' : '▾'} ${title}${isCollapsed && summary !== '' ? ` · ${summary}` : ''}`

@@ -26,13 +26,13 @@ function engine(on: On) {
     value: {
       startedAt: 0,
       context: { tokens: 142_000, window: 1_000_000, percent: 14 },
-      rateLimits: {},
+      rateLimits: [],
       cost: { usd: 1.24 },
     },
   }))
   on('turn.complete', () => ({ text: '' }))
   on('tool.call', (_, e) => ({
-    result: { filePath: String(e.file_path ?? ''), structuredPatch: [{ lines: ['+x'] }] },
+    result: { filePath: String((e as { file_path?: unknown }).file_path ?? ''), structuredPatch: [{ lines: ['+x'] }] },
   }))
   mock.store(on)
   return mock.clock(on)
