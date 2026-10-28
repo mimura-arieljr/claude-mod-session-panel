@@ -56,5 +56,5 @@ test('the braille ring fills clockwise and shows the percent inside', async () =
   expect(bottomColor).toBe(0x262a35)
   const middle = [4, 5, 6, 7].map(x => String.fromCharCode(cell(words, 12, x, 2)[0])).join('')
   expect(middle).toContain('50%')
-  expect(cell(words, 12, 0, 0)[2]).toBe(0x1a1d24)
+  expect(cell(words, 12, 0, 0)[2]).toBe(0x191d24)
 })

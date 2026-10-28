@@ -187,3 +187,12 @@ test('the command says why the pane is not beside the chat', async ($, on) => {
   } as never)
   expect(wide.text).toBe('Session panel shown beside the chat.')
 })
+
+test('the panel fills its pane in black', async ($, on) => {
+  engine(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const root = (await ui.drawn()) as { props?: { backgroundColor?: string; minHeight?: number } }
+  expect(root.props?.backgroundColor).toBe('#000000')
+  expect(root.props?.minHeight).toBe(80)
+  await ui.unmount()
+})

@@ -170,7 +170,7 @@ export function registerPanel(on: On, ttlMs: number): void {
     const progressBody = () => {
       const { shown, hidden } = more(t.todos)
       return (
-        <Box flexDirection="column">
+        <Box flexDirection="column" marginTop={1}>
           <Box flexDirection="row">
             {isTurnRunning ? (
               <Text backgroundColor={COLORS.accentTint} color={COLORS.accent} bold>
@@ -230,7 +230,7 @@ export function registerPanel(on: On, ttlMs: number): void {
       return <Svg source={ringSvg(percent)} alt={`${percent}% context`} width={104} height={104} />
     }
     const usageBody = () => (
-      <Box flexDirection="column">
+      <Box flexDirection="column" marginTop={1}>
         <Box flexDirection="row">
           <Box flexDirection="column" alignItems="center">
             {contextRing()}
@@ -405,7 +405,12 @@ export function registerPanel(on: On, ttlMs: number): void {
     }
 
     return (
-      <Box flexDirection="column" backgroundColor={COLORS.page} gap={1}>
+      <Box
+        flexDirection="column"
+        backgroundColor={COLORS.page}
+        gap={1}
+        minHeight={e.props.scroll.bodyRows}
+      >
         {header}
         {section('progress', 'PROGRESS', null, progressRight, progressBody)}
         {section('usage', 'USAGE', null, muted(usd), usageBody)}

@@ -1,8 +1,10 @@
 // Drawing helpers for the panel's look: the context ring, diff bars, short paths.
 
 export const COLORS = {
-  page: '#111318',
+  page: '#000000',
   card: '#1A1D24',
+  // The ring's cells: a hair darker so the terminal's palette lands on the card color.
+  ringBg: '#191D24',
   cardBorder: '#2A2F3A',
   raised: '#20242D',
   track: '#262A35',
@@ -109,7 +111,7 @@ export function ringCells(percent: number, columns: number, rows: number): Uint3
   const words = new Uint32Array(columns * rows * 3)
   const fill = hexNumber(COLORS.accent)
   const track = hexNumber(COLORS.track)
-  const bg = hexNumber(COLORS.card)
+  const bg = hexNumber(COLORS.ringBg)
   // Braille dots are square on a 1:2 cell, so the ring is round in dot space.
   const width = columns * 2
   const height = rows * 4
