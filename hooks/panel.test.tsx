@@ -124,7 +124,7 @@ test('the command opens a pane that is listed but not drawn', async ($, on) => {
   })
   const ran = await $.command.run({ command: 'session-panel', args: '' } as never)
   expect(calls).toEqual(['open'])
-  expect(ran.text).toBe('Session panel shown.')
+  expect(ran.text).toContain('Session panel shown')
 })
 
 test('section titles are drawn inside their boxes, not over the border', async ($, on) => {
@@ -133,4 +133,35 @@ test('section titles are drawn inside their boxes, not over the border', async (
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(JSON.stringify(await ui.drawn())).not.toContain('"absolute"')
   await ui.unmount()
+})
+
+test('titles carry no hotkey numbering', async ($, on) => {
+  engine(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(JSON.stringify(await ui.drawn())).not.toContain('"hotkey"')
+  await ui.unmount()
+})
+
+test('the command says why the pane is not beside the chat', async ($, on) => {
+  engine(on)
+  on('ui.panes', () => ({ value: [] }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const narrow = await $.command.run({
+    command: 'session-panel',
+    args: '',
+    presentation: { isFullscreen: true, columns: 96 },
+  } as never)
+  expect(narrow.text).toContain('110 columns')
+  const mainScreen = await $.command.run({
+    command: 'session-panel',
+    args: '',
+    presentation: { isFullscreen: false, columns: 200 },
+  } as never)
+  expect(mainScreen.text).toContain('fullscreen')
+  const wide = await $.command.run({
+    command: 'session-panel',
+    args: '',
+    presentation: { isFullscreen: true, columns: 200 },
+  } as never)
+  expect(wide.text).toBe('Session panel shown beside the chat.')
 })

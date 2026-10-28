@@ -15,8 +15,9 @@ Totals cover the whole chat thread. `/clear` starts fresh; `/resume` brings a th
 ## Use
 
 - The pane opens at session start on terminals 144+ columns wide.
-- `/session-panel` shows or hides it at any width.
-- Click a section title, or press `1`-`5` while the pane has focus, to collapse or expand it.
+- `/session-panel` shows or hides it at any width, and says where it went.
+- It docks beside the chat in fullscreen layout (`"tui": "fullscreen"`) on terminals 110+ columns wide; otherwise it sits above the prompt.
+- Click a section title (or Tab to it and press Enter) to collapse or expand it.
 
 ## Options
 

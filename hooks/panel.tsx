@@ -9,6 +9,9 @@ const TITLE = 'Session'
 const ACCENT = 'promptBorder'
 const EMPTY_BAR = '#0e4f5c'
 const BAR_CELLS = 20
+// Body columns asked of the dock beside the chat.
+const DOCK_COLUMNS = 56
+const DOCK_MIN_TERMINAL = 110
 const MAX_ROWS = 10
 const GLYPH: Record<Todo['status'], string> = { completed: '✓', in_progress: '▸', pending: '○' }
 
@@ -17,7 +20,7 @@ let tick: { cancel(): void } | undefined
 // Called from session.start: registers the command, opens the pane, starts the minute tick.
 export async function setupPanel($: EngineInterface): Promise<void> {
   await $.command.register({ name: 'session-panel', description: 'Show or hide the session panel' })
-  void $.ui.open({ id: PANE, title: TITLE })
+  void $.ui.open({ id: PANE, title: TITLE, columns: DOCK_COLUMNS })
   tick?.cancel()
   tick = $.clock.every(60_000, async () => {
     await setNow($, await $.clock.now())
@@ -28,12 +31,24 @@ function more<T>(list: readonly T[]): { shown: readonly T[]; hidden: number } {
   return { shown: list.slice(0, MAX_ROWS), hidden: Math.max(0, list.length - MAX_ROWS) }
 }
 
+// Says where the pane went, and what docks it beside the chat when it didn't.
+function placementNote(presentation: { isFullscreen: boolean; columns: number } | undefined): string {
+  if (presentation === undefined) return 'Session panel shown.'
+  if (!presentation.isFullscreen) {
+    return 'Session panel shown above the prompt. It docks beside the chat in fullscreen layout ("tui": "fullscreen" in settings).'
+  }
+  if (presentation.columns < DOCK_MIN_TERMINAL) {
+    return `Session panel shown above the prompt. Widen the terminal to ${DOCK_MIN_TERMINAL} columns (now ${presentation.columns}) to dock it beside the chat.`
+  }
+  return 'Session panel shown beside the chat.'
+}
+
 function shortCache(status: string): string {
   return status.startsWith('warm · ') ? status.slice('warm · '.length).replace(' left', '') : status
 }
 
 export function registerPanel(on: On, ttlMs: number): void {
-  on('command.run', { command: 'session-panel' }, async $ => {
+  on('command.run', { command: 'session-panel' }, async ($, e) => {
     // A pane waiting for room, or a tab behind another, counts as not open.
     const isOpen = (await $.ui.panes()).some(
       pane => pane.id === PANE && pane.isPlaced && pane.isShown,
@@ -42,8 +57,8 @@ export function registerPanel(on: On, ttlMs: number): void {
       await $.ui.close({ id: PANE })
       return { text: 'Session panel hidden.' }
     }
-    await $.ui.open({ id: PANE, title: TITLE })
-    return { text: 'Session panel shown.' }
+    await $.ui.open({ id: PANE, title: TITLE, columns: DOCK_COLUMNS })
+    return { text: placementNote(e.presentation) }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -57,7 +72,6 @@ export function registerPanel(on: On, ttlMs: number): void {
 
     const section = (
       id: SectionId,
-      hotkey: string,
       title: string,
       summary: string,
       body: () => RenderChildren,
@@ -69,7 +83,6 @@ export function registerPanel(on: On, ttlMs: number): void {
           <Button
             plain
             key={`toggle-${id}`}
-            hotkey={hotkey}
             onPress={() => {
               void changeThread($, current => toggleSection(current, id))
             }}
@@ -206,11 +219,11 @@ export function registerPanel(on: On, ttlMs: number): void {
 
     return (
       <Box flexDirection="column">
-        {section('progress', '1', 'Progress', p === null ? '' : `${p.done}/${p.total} · ${p.percent}%`, progressBody)}
-        {section('usage', '2', 'Usage', usageSummary, usageBody)}
-        {section('files', '3', `Files changed · ${t.files.length}`, '', filesBody)}
-        {section('tools', '4', 'Skills & MCPs', toolsSummary, toolsBody)}
-        {section('assumptions', '5', 'Assumptions', String(t.assumptions.length), assumptionsBody)}
+        {section('progress', 'Progress', p === null ? '' : `${p.done}/${p.total} · ${p.percent}%`, progressBody)}
+        {section('usage', 'Usage', usageSummary, usageBody)}
+        {section('files', `Files changed · ${t.files.length}`, '', filesBody)}
+        {section('tools', 'Skills & MCPs', toolsSummary, toolsBody)}
+        {section('assumptions', 'Assumptions', String(t.assumptions.length), assumptionsBody)}
       </Box>
     )
   })
