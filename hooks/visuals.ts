@@ -1,8 +1,8 @@
 // Drawing helpers for the panel's look: the context ring, diff bars, short paths.
 
 export const COLORS = {
-  // Black, matching the frame once the theme sets composerSidebarBackground to black.
-  page: '#000000',
+  // Matches the frame once the theme sets composerSidebarBackground to the same color.
+  page: '#47475C',
   card: '#1A1D24',
   cardBorder: '#2A2F3A',
   raised: '#20242D',
