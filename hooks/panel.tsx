@@ -1,9 +1,9 @@
 import type { EngineInterface, On, RenderChildren } from 'claude-code'
 
 import type { SectionId, Todo } from '../types'
-import { cacheStatus, formatTokens, formatUsd, progress, toggleSection } from './model'
+import { cacheFraction, cacheStatus, formatTokens, formatUsd, progress, toggleSection } from './model'
 import { changeThread, readNow, readThread, readTurnRunning, setNow } from './thread-state'
-import { cacheFraction, COLORS, diffCells, ringRows, ringSvg, splitPath } from './visuals'
+import { COLORS, diffCells, ringRows, ringSvg, splitPath } from './visuals'
 
 export const PANE = 'session-panel'
 const TITLE = 'Session'
@@ -81,12 +81,14 @@ export function registerPanel(on: On, ttlMs: number): void {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
-    const t = await readThread($)
-    const isTurnRunning = await readTurnRunning($)
     // Reading `now` subscribes the pane to the minute tick.
-    await readNow($)
-    const at = await $.clock.now()
-    const { context, cost } = await $.session.usage()
+    const [t, isTurnRunning, , at, { context, cost }] = await Promise.all([
+      readThread($),
+      readTurnRunning($),
+      readNow($),
+      $.clock.now(),
+      $.session.usage(),
+    ])
     const barCells = Math.max(8, Math.min(28, e.props.bodyColumns - 18))
 
     const label = (text: string) => (
@@ -133,6 +135,7 @@ export function registerPanel(on: On, ttlMs: number): void {
               <Text color={COLORS.label} bold>
                 {title}
               </Text>
+              {badge !== null && ' '}
               {badge}
             </Button>
             {right}
@@ -421,11 +424,11 @@ export function registerPanel(on: On, ttlMs: number): void {
         {divider(0)}
         {section('usage', 'USAGE', null, muted(usd), usageBody)}
         {divider(1)}
-        {section('files', 'FILES CHANGED ', filesBadge, filesRight, filesBody)}
+        {section('files', 'FILES CHANGED', filesBadge, filesRight, filesBody)}
         {divider(2)}
         {section('tools', 'SKILLS & MCPS', null, muted(String(toolUses)), toolsBody)}
         {divider(3)}
-        {section('assumptions', 'ASSUMPTIONS ', assumptionsBadge, null, assumptionsBody)}
+        {section('assumptions', 'ASSUMPTIONS', assumptionsBadge, null, assumptionsBody)}
       </Box>
     )
   })

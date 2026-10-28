@@ -48,17 +48,9 @@ export function registerCollectors(on: On): void {
       await changeThread($, t => applyFileChange(t, { path, isNew, lines }))
     } else if (e.tool === 'NotebookEdit') {
       const path = relativePath(await $.session.cwd(), e.notebook_path)
-      await changeThread($, t => {
-        const touched = applyFileChange(t, { path, isNew: false, lines: [] })
-        return {
-          ...touched,
-          files: touched.files.map(file =>
-            file.path === path && !file.notes.includes('edited cell')
-              ? { ...file, notes: [...file.notes, 'edited cell'] }
-              : file,
-          ),
-        }
-      })
+      await changeThread($, t =>
+        applyFileChange(t, { path, isNew: false, lines: [], notes: ['edited cell'] }),
+      )
     } else if (e.tool === 'TodoWrite' && e.agentId === undefined) {
       await changeThread($, t => applyTodoWrite(t, e.todos))
     } else if (e.tool === 'TaskCreate' && e.agentId === undefined) {

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { cacheFraction, diffCells, ringCells, ringRows, ringSvg, splitPath } from './visuals'
+import { diffCells, ringCells, ringRows, ringSvg, splitPath } from './visuals'
 
 test('diff cells split by share, each side visible when present', async () => {
   expect(diffCells(5, 0, 7)).toEqual({ plus: 7, minus: 0 })
@@ -18,14 +18,6 @@ test('paths split into a name and a short folder', async () => {
   })
 })
 
-test('cache fraction is what is left of the lifetime', async () => {
-  const H = 3_600_000
-  expect(cacheFraction(null, 0, H, false)).toBe(0)
-  expect(cacheFraction(0, 5, H, true)).toBe(1)
-  expect(cacheFraction(0, H / 4, H, false)).toBe(0.75)
-  expect(cacheFraction(0, H * 2, H, false)).toBe(0)
-})
-
 test('the svg ring dashes its fill to the percent', async () => {
   const svg = ringSvg(31)
   expect(svg).toContain('stroke-dasharray="85.7 276.5"')
@@ -33,23 +25,17 @@ test('the svg ring dashes its fill to the percent', async () => {
   expect(svg).toContain('>31%<')
 })
 
-// One cell of a Raster: [codePoint, foreground, background].
-function cell(words: Uint32Array, columns: number, x: number, y: number): [number, number, number] {
-  const i = (y * columns + x) * 3
-  return [words[i] ?? 0, words[i + 1] ?? 0, words[i + 2] ?? 0]
-}
-
 test('the braille ring fills clockwise and shows the percent inside', async () => {
-  const words = ringCells(50, 12, 6)
-  expect(words).toHaveLength(12 * 6 * 3)
-  const [topGlyph, topColor] = cell(words, 12, 6, 0)
-  expect(topGlyph).toBeGreaterThan(0x2800)
-  expect(topColor).toBe(0x4fd1c5)
-  const [bottomGlyph, bottomColor] = cell(words, 12, 5, 5)
-  expect(bottomGlyph).toBeGreaterThan(0x2800)
-  expect(bottomColor).toBe(0x262a35)
-  const middle = [4, 5, 6, 7].map(x => String.fromCharCode(cell(words, 12, x, 2)[0])).join('')
-  expect(middle).toContain('50%')
+  const cells = ringCells(50, 12, 6)
+  expect(cells).toHaveLength(6)
+  expect(cells.every(row => row.length === 12)).toBe(true)
+  const top = cells[0]![6]!
+  expect(top.glyph.charCodeAt(0)).toBeGreaterThan(0x2800)
+  expect(top.color).toBe('#4FD1C5')
+  const bottom = cells[5]![5]!
+  expect(bottom.glyph.charCodeAt(0)).toBeGreaterThan(0x2800)
+  expect(bottom.color).toBe('#262A35')
+  expect(cells[2]!.map(cell => cell.glyph).join('')).toContain('50%')
 })
 
 test('ring rows group cells into colored runs', async () => {

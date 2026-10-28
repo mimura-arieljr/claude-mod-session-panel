@@ -120,11 +120,11 @@ export function summarizeChange(lines: readonly string[]): string[] {
 
 export function applyFileChange(
   t: Thread,
-  c: { path: string; isNew: boolean; lines: readonly string[] },
+  c: { path: string; isNew: boolean; lines: readonly string[]; notes?: readonly string[] },
 ): Thread {
   const added = c.lines.filter(line => line.startsWith('+')).length
   const removed = c.lines.filter(line => line.startsWith('-')).length
-  const notes = summarizeChange(c.lines)
+  const notes = c.notes ? [...c.notes] : summarizeChange(c.lines)
   const existing = t.files.find(file => file.path === c.path)
   if (existing === undefined) {
     return {
@@ -237,4 +237,16 @@ export function cacheStatus(
   const left = lastReplyAt + ttlMs - now
   if (left <= 0) return 'cold'
   return `warm · ${Math.ceil(left / 60_000)}m left`
+}
+
+// What share of the cache lifetime is left: 1 while a turn runs, 0 when cold or unknown.
+export function cacheFraction(
+  lastReplyAt: number | null,
+  now: number,
+  ttlMs: number,
+  isTurnRunning: boolean,
+): number {
+  if (isTurnRunning) return 1
+  if (lastReplyAt === null) return 0
+  return Math.min(1, Math.max(0, (lastReplyAt + ttlMs - now) / ttlMs))
 }

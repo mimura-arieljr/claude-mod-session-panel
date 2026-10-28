@@ -4,13 +4,11 @@ export const COLORS = {
   // Matches the frame once the theme sets composerSidebarBackground to the same color.
   page: '#101317',
   card: '#1A1D24',
-  cardBorder: '#2A2F3A',
   raised: '#20242D',
   track: '#262A35',
   badge: '#262A35',
   dashed: '#343A47',
   accent: '#4FD1C5',
-  accentSoft: '#8FE9E0',
   // accent at 12% over the card
   accentTint: '#203337',
   amber: '#E6B866',
@@ -52,18 +50,6 @@ export function splitPath(path: string): { name: string; dir: string } {
   return { name, dir: `…/${dirs.slice(-2).join('/')}/` }
 }
 
-// What share of the cache lifetime is left: 1 while a turn runs, 0 when cold or unknown.
-export function cacheFraction(
-  lastReplyAt: number | null,
-  now: number,
-  ttlMs: number,
-  isTurnRunning: boolean,
-): number {
-  if (isTurnRunning) return 1
-  if (lastReplyAt === null) return 0
-  return clamp01((lastReplyAt + ttlMs - now) / ttlMs)
-}
-
 // The design's ring as SVG, for surfaces that draw SVG (desktop, editor, mobile).
 export function ringSvg(percent: number): string {
   const share = clamp01(percent / 100)
@@ -85,17 +71,10 @@ const BRAILLE_BITS = [
   [0x08, 0x10, 0x20, 0x80],
 ]
 
-function hexNumber(hex: string): number {
-  return parseInt(hex.slice(1), 16)
-}
+type RingCell = { glyph: string; color: string }
 
-// Raster cells of a braille ring with the percent inside: [codePoint, fg, bg] per cell, row-major.
-export function ringCells(percent: number, columns: number, rows: number): Uint32Array {
-  const words = new Uint32Array(columns * rows * 3)
-  const fill = hexNumber(COLORS.accent)
-  const track = hexNumber(COLORS.track)
-  // No background of its own: the ring sits on whatever is behind it.
-  const bg = 0x01000000
+// A braille ring with the percent inside, as rows of colored cells.
+export function ringCells(percent: number, columns: number, rows: number): RingCell[][] {
   // Braille dots are square on a 1:2 cell, so the ring is round in dot space.
   const width = columns * 2
   const height = rows * 4
@@ -105,7 +84,9 @@ export function ringCells(percent: number, columns: number, rows: number): Uint3
   const inner = outer * 0.72
   const share = clamp01(percent / 100)
 
+  const cells: RingCell[][] = []
   for (let row = 0; row < rows; row++) {
+    const line: RingCell[] = []
     for (let col = 0; col < columns; col++) {
       let bits = 0
       let filled = 0
@@ -123,48 +104,35 @@ export function ringCells(percent: number, columns: number, rows: number): Uint3
           else tracked++
         }
       }
-      const i = (row * columns + col) * 3
-      words[i] = bits === 0 ? 0x20 : 0x2800 + bits
-      words[i + 1] = filled >= tracked && filled > 0 ? fill : track
-      words[i + 2] = bg
+      line.push({
+        glyph: bits === 0 ? ' ' : String.fromCharCode(0x2800 + bits),
+        color: filled >= tracked && filled > 0 ? COLORS.accent : COLORS.track,
+      })
     }
+    cells.push(line)
   }
 
   // The percent and a label, centered in the hole.
-  const write = (text: string, row: number, color: number) => {
+  const write = (text: string, row: number, color: string) => {
     const start = Math.floor((columns - text.length) / 2)
-    for (let k = 0; k < text.length; k++) {
-      const i = (row * columns + start + k) * 3
-      words[i] = text.charCodeAt(k)
-      words[i + 1] = color
-    }
+    for (let k = 0; k < text.length; k++) cells[row]![start + k] = { glyph: text[k]!, color }
   }
   const middle = Math.floor((rows - 1) / 2)
-  write(`${Math.round(percent)}%`, middle, hexNumber(COLORS.text))
-  write('ctx', middle + 1, hexNumber(COLORS.muted))
-  return words
+  write(`${Math.round(percent)}%`, middle, COLORS.text)
+  write('ctx', middle + 1, COLORS.muted)
+  return cells
 }
 
 // The ring as rows of colored text runs, for drawing with plain Text.
-export function ringRows(
-  percent: number,
-  columns: number,
-  rows: number,
-): { text: string; color: string }[][] {
-  const words = ringCells(percent, columns, rows)
-  const out: { text: string; color: string }[][] = []
-  for (let row = 0; row < rows; row++) {
+export function ringRows(percent: number, columns: number, rows: number): { text: string; color: string }[][] {
+  return ringCells(percent, columns, rows).map(line => {
     const runs: { text: string; color: string }[] = []
-    for (let col = 0; col < columns; col++) {
-      const i = (row * columns + col) * 3
-      const glyph = String.fromCharCode(words[i] ?? 0x20)
-      const color = `#${(words[i + 1] ?? 0).toString(16).padStart(6, '0').toUpperCase()}`
+    for (const { glyph, color } of line) {
       const last = runs[runs.length - 1]
       // A blank joins the run before it: its color doesn't show.
       if (last !== undefined && (last.color === color || glyph === ' ')) last.text += glyph
       else runs.push({ text: glyph, color })
     }
-    out.push(runs)
-  }
-  return out
+    return runs
+  })
 }

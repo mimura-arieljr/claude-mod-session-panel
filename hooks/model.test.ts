@@ -7,6 +7,7 @@ import {
   applyTaskCreate,
   applyTaskUpdate,
   applyTodoWrite,
+  cacheFraction,
   cacheStatus,
   emptyThread,
   formatTokens,
@@ -119,6 +120,20 @@ test('cache status counts down from the last reply', async () => {
   expect(cacheStatus(0, H, H, false)).toBe('cold')
   expect(parseTtl('5m')).toBe(300_000)
   expect(parseTtl('60m')).toBe(H)
+})
+
+test('cache fraction is what is left of the lifetime', async () => {
+  const H = 3_600_000
+  expect(cacheFraction(null, 0, H, false)).toBe(0)
+  expect(cacheFraction(0, 5, H, true)).toBe(1)
+  expect(cacheFraction(0, H / 4, H, false)).toBe(0.75)
+  expect(cacheFraction(0, H * 2, H, false)).toBe(0)
+})
+
+test('a change can bring its own notes', async () => {
+  let t = applyFileChange(emptyThread('s'), { path: 'n.ipynb', isNew: false, lines: [], notes: ['edited cell'] })
+  t = applyFileChange(t, { path: 'n.ipynb', isNew: false, lines: [], notes: ['edited cell'] })
+  expect(t.files).toEqual([{ path: 'n.ipynb', isNew: false, added: 0, removed: 0, notes: ['edited cell'] }])
 })
 
 test('toggle collapses and expands', async () => {
