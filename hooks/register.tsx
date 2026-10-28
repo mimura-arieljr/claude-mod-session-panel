@@ -1,3 +1,7 @@
 import type { Register } from 'claude-code'
 
-export const register: Register = () => {}
+import { registerCollectors } from './collect'
+
+export const register: Register = on => {
+  registerCollectors(on)
+}
