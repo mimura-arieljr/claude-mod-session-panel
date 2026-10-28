@@ -2,7 +2,7 @@
 
 export const COLORS = {
   // Matches the frame once the theme sets composerSidebarBackground to the same color.
-  page: '#47475C',
+  page: '#101317',
   card: '#1A1D24',
   cardBorder: '#2A2F3A',
   raised: '#20242D',

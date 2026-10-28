@@ -21,10 +21,10 @@ Totals cover the whole chat thread. `/clear` starts fresh; `/resume` brings a th
 
 ## Black frame
 
-Claude Code paints the frame around a docked pane with the theme color `composerSidebarBackground` (`#262626` in the dark theme). To make the frame match the panel (`#47475C`), add it to your custom theme's overrides, for example `~/.claude/themes/<name>.json`:
+Claude Code paints the frame around a docked pane with the theme color `composerSidebarBackground` (`#262626` in the dark theme). To make the frame match the panel (`#101317`), add it to your custom theme's overrides, for example `~/.claude/themes/<name>.json`:
 
 ```json
-"overrides": { "composerSidebarBackground": "#47475C" }
+"overrides": { "composerSidebarBackground": "#101317" }
 ```
 
 ## Options

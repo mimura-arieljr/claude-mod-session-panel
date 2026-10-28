@@ -194,16 +194,16 @@ test('the command says why the pane is not beside the chat', async ($, on) => {
   expect(wide.text).toBe('Session panel shown beside the chat.')
 })
 
-test('the panel fills its pane in slate', async ($, on) => {
+test('the panel fills its pane in near-black', async ($, on) => {
   engine(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const root = (await ui.drawn()) as { props?: { backgroundColor?: string; minHeight?: number } }
-  expect(root.props?.backgroundColor).toBe('#47475C')
+  expect(root.props?.backgroundColor).toBe('#101317')
   expect(root.props?.minHeight).toBe(80)
   await ui.unmount()
 })
 
-test('the pane opens on a slate body', async ($, on) => {
+test('the pane opens on a near-black body', async ($, on) => {
   engine(on)
   const opened: unknown[] = []
   on('ui.panes', () => ({ value: [] }))
@@ -212,5 +212,14 @@ test('the pane opens on a slate body', async ($, on) => {
     return { value: { isPlaced: true } }
   })
   await $.command.run({ command: 'session-panel', args: '' } as never)
-  expect(opened).toEqual([expect.objectContaining({ backgroundColor: '#47475C' })])
+  expect(opened).toEqual([expect.objectContaining({ backgroundColor: '#101317' })])
+})
+
+test('every section sits in a rounded bordered card', async ($, on) => {
+  engine(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const drawn = JSON.stringify(await ui.drawn())
+  const cards = drawn.match(/"backgroundColor":"#1A1D24","borderStyle":"round","borderColor":"#2A2F3A"/g) ?? []
+  expect(cards).toHaveLength(5)
+  await ui.unmount()
 })

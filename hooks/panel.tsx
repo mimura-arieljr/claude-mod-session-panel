@@ -120,7 +120,14 @@ export function registerPanel(on: On, ttlMs: number): void {
     ) => {
       const isCollapsed = t.collapsed.includes(id)
       return (
-        <Box key={id} flexDirection="column" backgroundColor={COLORS.card} paddingX={1} paddingY={1}>
+        <Box
+          key={id}
+          flexDirection="column"
+          backgroundColor={COLORS.card}
+          borderStyle="round"
+          borderColor={COLORS.cardBorder}
+          paddingX={1}
+        >
           <Box flexDirection="row" justifyContent="space-between">
             <Button
               plain
