@@ -118,3 +118,21 @@ test('skill and mcp uses are listed', async ($, on) => {
   expect(t.skills).toEqual([{ name: 'superpowers:brainstorming', count: 1 }])
   expect(t.mcps).toEqual([{ server: 'claude_ai_Notion', tools: ['notion-search'], count: 1 }])
 })
+
+test('a Write that creates a file counts its content', async ($, on) => {
+  const thread = engine(on)
+  // The engine's real create result: an empty patch, the content beside it.
+  on('tool.call', () => ({
+    result: {
+      type: 'create',
+      filePath: '/r/c.ts',
+      content: 'export function c() {}\nexport function d() {}\n',
+      structuredPatch: [],
+      originalFile: null,
+    },
+  }))
+  await $.tool.call({ tool: 'Write', file_path: '/r/c.ts', content: 'x' })
+  expect(thread().files).toEqual([
+    { path: 'c.ts', isNew: true, added: 2, removed: 0, notes: ['added c', 'added d'] },
+  ])
+})

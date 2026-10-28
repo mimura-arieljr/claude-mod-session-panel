@@ -106,3 +106,23 @@ test('long lists cap at 10', async ($, on) => {
   expect(await ui.find({ text: /f12\.ts/ })).toBeUndefined()
   await ui.unmount()
 })
+
+test('the command opens a pane that is listed but not drawn', async ($, on) => {
+  engine(on)
+  const calls: string[] = []
+  on('command.register', () => ({ value: { command: 'session-panel' } }))
+  on('ui.panes', () => ({
+    value: [{ id: 'session-panel', title: 'Session', isShown: true, isFocused: false, isPlaced: false }],
+  }))
+  on('ui.open', () => {
+    calls.push('open')
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', () => {
+    calls.push('close')
+    return { value: undefined }
+  })
+  const ran = await $.command.run({ command: 'session-panel', args: '' } as never)
+  expect(calls).toEqual(['open'])
+  expect(ran.text).toBe('Session panel shown.')
+})

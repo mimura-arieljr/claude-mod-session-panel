@@ -34,7 +34,10 @@ function shortCache(status: string): string {
 
 export function registerPanel(on: On, ttlMs: number): void {
   on('command.run', { command: 'session-panel' }, async $ => {
-    const isOpen = (await $.ui.panes()).some(pane => pane.id === PANE)
+    // A pane waiting for room, or a tab behind another, counts as not open.
+    const isOpen = (await $.ui.panes()).some(
+      pane => pane.id === PANE && pane.isPlaced && pane.isShown,
+    )
     if (isOpen) {
       await $.ui.close({ id: PANE })
       return { text: 'Session panel hidden.' }

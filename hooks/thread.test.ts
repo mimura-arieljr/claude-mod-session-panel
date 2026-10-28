@@ -110,3 +110,45 @@ test('a main turn end saves the snapshot and keeps at most 50 threads', async ($
   await $.turn.start({ text: 'hi', turnId: 't4' })
   expect(thread().files).toEqual([FILE])
 })
+
+test('clear empties the thread before the next prompt', async ($, on) => {
+  const { session, thread } = engine(on)
+  on('classic.SessionStart', () => ({}))
+  await $.session.start(START)
+  await $.tool.call(EDIT)
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } })
+  expect(thread().files).toEqual([])
+  session.id = 's2'
+  await $.classic.SessionStart({ source: 'clear' })
+  expect(thread()).toEqual(emptyThread('s2'))
+})
+
+test('resume shows the snapshot before the next prompt', async ($, on) => {
+  const saved: Thread = { ...emptyThread('s0'), files: [FILE] }
+  const { session, thread } = engine(on, { 'thread:s0': saved })
+  on('classic.SessionStart', () => ({}))
+  await $.session.start(START)
+  await $.session.end({ reason: 'resume', sessionId: 's1', resume: { id: 's1' } })
+  session.id = 's0'
+  await $.classic.SessionStart({ source: 'resume' })
+  expect(thread()).toEqual(saved)
+})
+
+test('starting with --fork-session says tracking started late', async ($, on) => {
+  const { thread } = engine(on)
+  on('classic.SessionStart', () => ({}))
+  await $.classic.SessionStart({ source: 'fork' })
+  await $.session.start(START)
+  expect(thread()).toEqual({ ...emptyThread('s1'), isTrackingSinceResume: true })
+})
+
+test('an in-process fork still copies the thread', async ($, on) => {
+  const { session, thread } = engine(on)
+  on('classic.SessionStart', () => ({}))
+  await $.session.start(START)
+  await $.tool.call(EDIT)
+  session.id = 's3'
+  await $.classic.SessionStart({ source: 'fork' })
+  expect(thread().sessionId).toBe('s3')
+  expect(thread().files).toEqual([FILE])
+})

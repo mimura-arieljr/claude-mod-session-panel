@@ -57,15 +57,24 @@ export async function saveSnapshot($: StoreDollar, t: Thread): Promise<void> {
 }
 
 export function registerThread(on: On): void {
+  // Fires for startup, /clear, /resume and forks with the new id already in place.
   on('classic.SessionStart', async ($, e, next) => {
     if (e.source === 'resume' || e.source === 'clear') {
       await setPendingSwitch($, e.source)
+    } else if (e.source === 'fork' && (await readThread($)).sessionId === '') {
+      // A process started with --fork-session can't find its parent: say tracking started late.
+      await setPendingSwitch($, 'resume')
     }
+    if (e.source !== 'startup') await syncThread($)
     return next(e)
   }).catch(($, e, next) => next(e))
 
   on('session.end', async ($, e, next) => {
     await saveSnapshot($, await readThread($))
+    if (e.reason === 'clear') {
+      // Empty the pane now: no session.start follows a /clear.
+      await changeThread($, () => emptyThread(''))
+    }
     if (e.reason === 'clear' || e.reason === 'resume') {
       await setPendingSwitch($, e.reason)
     }

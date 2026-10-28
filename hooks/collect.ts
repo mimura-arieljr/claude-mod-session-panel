@@ -19,19 +19,33 @@ function patchLines(patch: Patch): string[] {
   return (patch ?? []).flatMap(hunk => hunk.lines)
 }
 
+function contentLines(content: string): string[] {
+  const lines = content.split('\n')
+  if (lines[lines.length - 1] === '') lines.pop()
+  return lines.map(line => `+${line}`)
+}
+
 export function registerCollectors(on: On): void {
   on('tool.call', async ($, e, next) => {
     const ran = await next(e)
     if (ran.deny !== undefined || ran.isError === true) return ran
 
     if (e.tool === 'Edit' || e.tool === 'Write') {
-      const result = ran.result as { type?: string; filePath?: string; structuredPatch?: Patch }
+      const result = ran.result as {
+        type?: string
+        filePath?: string
+        content?: string
+        structuredPatch?: Patch
+      }
       const cwd = await $.session.cwd()
       const path = relativePath(cwd, result.filePath ?? e.file_path)
       const isNew = e.tool === 'Write' && result.type === 'create'
-      await changeThread($, t =>
-        applyFileChange(t, { path, isNew, lines: patchLines(result.structuredPatch) }),
-      )
+      // A created file comes back with an empty patch: count its content instead.
+      const lines =
+        isNew && (result.structuredPatch ?? []).length === 0
+          ? contentLines(result.content ?? '')
+          : patchLines(result.structuredPatch)
+      await changeThread($, t => applyFileChange(t, { path, isNew, lines }))
     } else if (e.tool === 'NotebookEdit') {
       const path = relativePath(await $.session.cwd(), e.notebook_path)
       await changeThread($, t => {
