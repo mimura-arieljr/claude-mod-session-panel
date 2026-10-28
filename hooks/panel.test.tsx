@@ -51,7 +51,6 @@ test('all sections start expanded', async ($, on) => {
     for (const title of ['PROGRESS', 'USAGE', 'FILES CHANGED', 'SKILLS & MCPS', 'ASSUMPTIONS']) {
       expect(await ui.find({ text: new RegExp(`▾ ${title}`) })).toBeDefined()
     }
-    expect(await ui.find({ text: /IDLE/ })).toBeDefined()
     expect(await ui.find({ text: /Waiting for your next message/ })).toBeDefined()
     expect(await ui.find({ text: /None yet/ })).toBeDefined()
     await ui.unmount()
@@ -225,11 +224,10 @@ test('sections are borderless cards split by cyan lines', async ($, on) => {
   await ui.unmount()
 })
 
-test('the idle pill uses the design colors', async ($, on) => {
+test('the header has no status pill', async ($, on) => {
   engine(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const drawn = JSON.stringify(await ui.drawn())
-  expect(drawn).toContain('"backgroundColor":"#1C2029","color":"#AEB4BF"')
-  expect(await ui.find({ text: /● IDLE/ })).toBeDefined()
+  expect(await ui.find({ text: /Session/ })).toBeDefined()
+  expect(await ui.find({ text: /● (IDLE|WORKING)/ })).toBeUndefined()
   await ui.unmount()
 })

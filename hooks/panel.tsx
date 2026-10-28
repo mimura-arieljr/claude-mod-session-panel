@@ -149,9 +149,9 @@ export function registerPanel(on: On, ttlMs: number): void {
       </Box>
     )
 
-    // Header: name and a WORKING / IDLE pill.
+    // Header: the panel's name.
     const header = (
-      <Box flexDirection="row" justifyContent="space-between" paddingX={1}>
+      <Box flexDirection="row" paddingX={1}>
         <Text>
           <Text color={COLORS.accent} bold>
             {'❯_ '}
@@ -160,19 +160,6 @@ export function registerPanel(on: On, ttlMs: number): void {
             {TITLE}
           </Text>
         </Text>
-        <Box marginRight={1}>
-          {isTurnRunning ? (
-            <Text backgroundColor={COLORS.pillWorking} color={COLORS.accentSoft} bold>
-              <Text color={COLORS.accent}>{' ● '}</Text>
-              {'WORKING '}
-            </Text>
-          ) : (
-            <Text backgroundColor={COLORS.pillIdle} color={COLORS.label} bold>
-              <Text color={COLORS.muted}>{' ● '}</Text>
-              {'IDLE '}
-            </Text>
-          )}
-        </Box>
       </Box>
     )
 
