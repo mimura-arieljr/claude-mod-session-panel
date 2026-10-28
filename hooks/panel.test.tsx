@@ -126,3 +126,11 @@ test('the command opens a pane that is listed but not drawn', async ($, on) => {
   expect(calls).toEqual(['open'])
   expect(ran.text).toBe('Session panel shown.')
 })
+
+test('section titles are drawn inside their boxes, not over the border', async ($, on) => {
+  engine(on)
+  // The terminal does not paint an absolute overlay on a border row.
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(JSON.stringify(await ui.drawn())).not.toContain('"absolute"')
+  await ui.unmount()
+})

@@ -65,30 +65,19 @@ export function registerPanel(on: On, ttlMs: number): void {
       const isCollapsed = t.collapsed.includes(id)
       const label = `${isCollapsed ? '▸' : '▾'} ${title}${isCollapsed && summary !== '' ? ` · ${summary}` : ''}`
       return (
-        <Box
-          key={id}
-          position="relative"
-          flexDirection="column"
-          borderStyle="round"
-          borderColor={ACCENT}
-          paddingX={1}
-          minHeight={isCollapsed ? 2 : undefined}
-        >
-          {/* The title sits on the top border, painted over it. */}
-          <Box position="absolute" top={-1} left={1}>
-            <Button
-              plain
-              key={`toggle-${id}`}
-              hotkey={hotkey}
-              onPress={() => {
-                void changeThread($, current => toggleSection(current, id))
-              }}
-            >
-              <Text color={ACCENT} bold>
-                {` ${label} `}
-              </Text>
-            </Button>
-          </Box>
+        <Box key={id} flexDirection="column" borderStyle="round" borderColor={ACCENT} paddingX={1}>
+          <Button
+            plain
+            key={`toggle-${id}`}
+            hotkey={hotkey}
+            onPress={() => {
+              void changeThread($, current => toggleSection(current, id))
+            }}
+          >
+            <Text color={ACCENT} bold>
+              {label}
+            </Text>
+          </Button>
           {!isCollapsed && body()}
         </Box>
       )
