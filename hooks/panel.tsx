@@ -386,7 +386,7 @@ export function registerPanel(on: On, ttlMs: number): void {
               flexDirection="row"
               backgroundColor={COLORS.raised}
               paddingX={1}
-              marginTop={i === 0 ? 0 : 1}
+              marginTop={1}
             >
               <Text color={COLORS.amber} bold>
                 {String(t.assumptions.length - i).padStart(2, '0')}
