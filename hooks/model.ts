@@ -1,4 +1,4 @@
-import type { Assumption, SectionId, Thread, TodoStatus } from '../types'
+import type { AgentRow, AgentStatus, Assumption, SectionId, Thread, TodoStatus } from '../types'
 
 const OWN_SERVER = 'session-panel'
 const MAX_NOTES = 4
@@ -267,4 +267,83 @@ export function cacheFraction(
   if (isTurnRunning) return 1
   if (lastReplyAt === null) return 0
   return Math.min(1, Math.max(0, (lastReplyAt + ttlMs - now) / ttlMs))
+}
+
+const DONE: readonly AgentStatus[] = ['completed', 'failed', 'killed']
+const MAX_FINISHED_AGENTS = 3
+const ACTIVITY_LENGTH = 60
+// Tool arguments that say what a call is about, most telling first.
+const ACTIVITY_KEYS = ['file_path', 'notebook_path', 'command', 'pattern', 'url', 'query', 'description', 'skill']
+
+export function isAgentDone(status: AgentStatus): boolean {
+  return DONE.includes(status)
+}
+
+// An agent's tool call as one short line: `Read hooks/visuals.ts`, `Bash npm test`.
+export function describeToolCall(tool: string, input: Record<string, unknown>, cwd: string): string {
+  const name = tool.startsWith('mcp__') ? tool.split('__').slice(1).join('·') : tool
+  const key = ACTIVITY_KEYS.find(k => typeof input[k] === 'string' && input[k] !== '')
+  if (key === undefined) return name
+  const value = String(input[key])
+  const arg = (key.endsWith('path') ? relativePath(cwd, value) : value).split('\n')[0]!
+  const line = `${name} ${arg}`
+  return line.length <= ACTIVITY_LENGTH ? line : `${line.slice(0, ACTIVITY_LENGTH - 1)}…`
+}
+
+// The engine's agent list folded into the rows shown.
+// - A row keeps the time it was first seen; a finish stamps its end.
+// - One the list dropped mid-run counts as completed; finished ones stay as they stood.
+// - Only the last few finished are kept.
+export function mergeAgents(
+  rows: readonly AgentRow[],
+  listed: readonly Pick<AgentRow, 'id' | 'type' | 'description' | 'status' | 'parentId'>[],
+  now: number,
+): AgentRow[] {
+  const seen = new Map(rows.map(row => [row.id, row]))
+  const merged = rows.map(row => {
+    const entry = listed.find(l => l.id === row.id)
+    if (entry === undefined) {
+      return isAgentDone(row.status) ? row : { ...row, status: 'completed' as const, endedAt: now }
+    }
+    return toRow(entry, row.startedAt, isAgentDone(entry.status) ? (row.endedAt ?? now) : undefined)
+  })
+  for (const entry of listed) {
+    if (!seen.has(entry.id)) merged.push(toRow(entry, now, isAgentDone(entry.status) ? now : undefined))
+  }
+  const finished = merged.filter(row => isAgentDone(row.status)).sort((a, b) => (a.endedAt ?? 0) - (b.endedAt ?? 0))
+  const dropped = new Set(finished.slice(0, Math.max(0, finished.length - MAX_FINISHED_AGENTS)).map(row => row.id))
+  return merged.filter(row => !dropped.has(row.id))
+}
+
+function toRow(
+  entry: Pick<AgentRow, 'id' | 'type' | 'description' | 'status' | 'parentId'>,
+  startedAt: number,
+  endedAt: number | undefined,
+): AgentRow {
+  return {
+    id: entry.id,
+    type: entry.type,
+    description: entry.description,
+    status: entry.status,
+    ...(entry.parentId === undefined ? {} : { parentId: entry.parentId }),
+    startedAt,
+    ...(endedAt === undefined ? {} : { endedAt }),
+  }
+}
+
+// Rows in tree order, each child after its parent, with its depth.
+export function agentTree(rows: readonly AgentRow[]): { row: AgentRow; depth: number }[] {
+  const ids = new Set(rows.map(row => row.id))
+  // A row whose parent isn't shown sits at the top.
+  const parentOf = (row: AgentRow) => (row.parentId !== undefined && ids.has(row.parentId) ? row.parentId : undefined)
+  const out: { row: AgentRow; depth: number }[] = []
+  const walk = (parent: string | undefined, depth: number) => {
+    for (const row of rows) {
+      if (parentOf(row) !== parent) continue
+      out.push({ row, depth })
+      walk(row.id, depth + 1)
+    }
+  }
+  walk(undefined, 0)
+  return out
 }

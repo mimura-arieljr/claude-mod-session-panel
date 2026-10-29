@@ -1,5 +1,6 @@
 import type { Register } from 'claude-code'
 
+import { registerAgents } from './agents'
 import { registerAssumptionTool, registerAssumptions } from './assumptions'
 import { registerCollectors } from './collect'
 import { parseTtl } from './model'
@@ -18,5 +19,6 @@ export const register: Register = (on, options) => {
   registerThread(on)
   registerAssumptions(on)
   registerCollectors(on)
+  registerAgents(on)
   registerPanel(on, parseTtl(String(options.cacheTtl ?? '60m')))
 }

@@ -371,3 +371,55 @@ test('an old reading dims and says its age', async ($, on) => {
   expect(rows).not.toContain('#4FD1C5')
   await ui.unmount()
 })
+
+type ListedAgent = { id: string; type: string; description: string; status: string; parentId?: string }
+
+// An engine whose agent list the test changes, and a spawn that starts the first.
+function agents(on: On, list: ListedAgent[]) {
+  on('agent.list', () => ({ value: list as never }))
+  on('agent.spawn', () => ({ model: 'm', agentId: list[0]?.id ?? 'x' }))
+}
+
+const SPAWN = { description: 'd', prompt: 'p', subagentType: 'Explore' } as never
+
+test('no agents section until an agent starts', async ($, on) => {
+  engine(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /AGENTS/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a running agent shows a spinner, its task, its time and its latest tool', async ($, on) => {
+  const clock = engine(on)
+  agents(on, [
+    { id: 'a1', type: 'Explore', description: 'find panel hooks', status: 'running' },
+    { id: 'a2', type: 'general-purpose', description: 'check usage types', status: 'completed', parentId: 'a1' },
+  ])
+  await $.agent.spawn(SPAWN)
+  await $.tool.call({ tool: 'Read', file_path: '/r/hooks/visuals.ts', agentId: 'a1' } as never)
+  await clock.advance(42_000)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /▾ ⋔ AGENTS/ })).toBeDefined()
+  expect(await ui.find({ text: /^1 running$/ })).toBeDefined()
+  expect(await ui.find({ text: /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] $/ })).toBeDefined()
+  expect(await ui.find({ text: /^find panel hooks$/ })).toBeDefined()
+  expect(await ui.find({ text: /^0:42$/ })).toBeDefined()
+  expect(await ui.find({ text: /^› Read hooks\/visuals\.ts$/ })).toBeDefined()
+  expect(await ui.find({ text: /^✓ $/ })).toBeDefined()
+  expect(await ui.find({ text: /^general / })).toBeDefined()
+  expect(await ui.find({ text: /^done$/ })).toBeDefined()
+  // The child sits two cells in from its parent.
+  const drawn = JSON.stringify(await ui.drawn())
+  expect(drawn).toContain('"key":"agent-a2","flexDirection":"column","marginLeft":2')
+  await ui.unmount()
+})
+
+test('a failed agent shows a cross and says so', async ($, on) => {
+  engine(on)
+  agents(on, [{ id: 'a1', type: 'Explore', description: 'x', status: 'failed' }])
+  await $.agent.spawn(SPAWN)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /^✗ $/ })).toBeDefined()
+  expect(await ui.find({ text: /^failed$/ })).toBeDefined()
+  await ui.unmount()
+})

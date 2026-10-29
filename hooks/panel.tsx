@@ -1,7 +1,9 @@
 import type { EngineInterface, On, RenderChildren } from 'claude-code'
 
-import type { FileEntry, SectionId } from '../types'
+import type { AgentRow, FileEntry, SectionId } from '../types'
+import { pollAgents } from './agents'
 import {
+  agentTree,
   cacheFraction,
   cacheStatus,
   formatAge,
@@ -9,10 +11,13 @@ import {
   formatReset,
   formatTokens,
   formatUsd,
+  isAgentDone,
   toggleSection,
 } from './model'
 import {
   changeThread,
+  readAgentActivity,
+  readAgents,
   readLimits,
   readNow,
   readThread,
@@ -40,8 +45,21 @@ const LIMITS_STALE_MS = 5 * 60_000
 const LIMIT_LABEL: Record<string, string> = { five_hour: '5h', seven_day: 'week', spend_limit: 'spend' }
 const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 const SPIN_MS = 250
+// How often the agent list is re-read while an agent is unfinished.
+const AGENT_POLL_MS = 2000
+const AGENT_TYPE_COLUMNS = 9
+const AGENT_STATUS_WORD: Record<AgentRow['status'], string> = {
+  pending: 'pending',
+  running: '',
+  waiting: 'waiting',
+  idle: 'idle',
+  completed: 'done',
+  failed: 'failed',
+  killed: 'killed',
+}
 // Single-width glyphs: emoji take two cells and break the row's alignment.
 const ICON: Record<SectionId, string> = {
+  agents: '⋔',
   usage: '∑',
   files: '±',
   tools: '✦',
@@ -59,9 +77,17 @@ export async function setupPanel($: EngineInterface): Promise<void> {
   void $.ui.open(PANE_OPEN)
   tick?.cancel()
   tick = $.clock.every(SPIN_MS, async () => {
-    const [at, isTurnRunning, last] = await Promise.all([$.clock.now(), readTurnRunning($), readNow($)])
-    // Each spinner frame while a turn runs, else once a minute for the cache countdown.
-    if (isTurnRunning || Math.floor(at / 60_000) !== Math.floor(last / 60_000)) await setNow($, at)
+    const [at, isTurnRunning, last, agents] = await Promise.all([
+      $.clock.now(),
+      readTurnRunning($),
+      readNow($),
+      readAgents($),
+    ])
+    // While an agent is unfinished, re-read the list every few seconds.
+    if (agents.isWatching && Math.floor(at / AGENT_POLL_MS) !== Math.floor(last / AGENT_POLL_MS)) await pollAgents($)
+    // Each spinner frame while a turn or an agent runs, else once a minute for the cache countdown.
+    const isMinuteNew = Math.floor(at / 60_000) !== Math.floor(last / 60_000)
+    if (isTurnRunning || agents.isWatching || isMinuteNew) await setNow($, at)
   })
 }
 
@@ -115,11 +141,13 @@ export function registerPanel(on: On, ttlMs: number): void {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     // Reading `now` subscribes the pane to the clock tick.
-    const [t, isTurnRunning, turnStartedAt, limits, , at, cwd, { context, cost }] = await Promise.all([
+    const [t, isTurnRunning, turnStartedAt, limits, agents, activity, , at, cwd, { context, cost }] = await Promise.all([
       readThread($),
       readTurnRunning($),
       readTurnStartedAt($),
       readLimits($),
+      readAgents($),
+      readAgentActivity($),
       readNow($),
       $.clock.now(),
       $.session.cwd(),
@@ -128,6 +156,7 @@ export function registerPanel(on: On, ttlMs: number): void {
     // Cells inside the frame: the body less both insets and the border.
     const contentColumns = Math.max(0, e.props.bodyColumns - INSET_X * 4 - 2)
     const barCells = Math.max(8, Math.min(24, contentColumns - 24))
+    const spinner = SPIN[Math.floor(at / SPIN_MS) % SPIN.length]!
 
     const muted = (text: string) => <Text color={COLORS.muted}>{text}</Text>
     const rowLabel = (text: string) => <Text color={COLORS.muted}>{text.padEnd(LABEL_COLUMNS)}</Text>
@@ -217,7 +246,7 @@ export function registerPanel(on: On, ttlMs: number): void {
                 WORKING
               </Text>
               {'  '}
-              <Text color={COLORS.accent}>{SPIN[Math.floor(at / SPIN_MS) % SPIN.length]!}</Text>{' '}
+              <Text color={COLORS.accent}>{spinner}</Text>{' '}
               <Text color={COLORS.textMid} italic>
                 {current?.text ?? 'Thinking…'}
               </Text>
@@ -238,6 +267,57 @@ export function registerPanel(on: On, ttlMs: number): void {
           </Box>
         )}
       </Box>
+    )
+
+    // Agents, shown once one has started
+    const runningAgents = agents.rows.filter(row => row.status === 'running').length
+    const agentsBadge = (
+      <Text color={COLORS.text} bold>
+        {String(agents.rows.length)}
+      </Text>
+    )
+    const agentsRight = muted(runningAgents > 0 ? `${runningAgents} running` : 'none running')
+    const agentRow = (row: AgentRow, depth: number) => {
+      const isDone = isAgentDone(row.status)
+      const isQuiet = row.status === 'idle' || row.status === 'waiting' || row.status === 'pending'
+      const [glyph, glyphColor] =
+        row.status === 'running'
+          ? [spinner, COLORS.accent]
+          : row.status === 'completed'
+            ? ['✓', COLORS.added]
+            : isDone
+              ? ['✗', COLORS.removed]
+              : ['○', COLORS.muted]
+      const type = row.type === 'general-purpose' ? 'general' : row.type.slice(0, AGENT_TYPE_COLUMNS)
+      const latest = activity[row.id]
+      return (
+        <Box key={`agent-${row.id}`} flexDirection="column" marginLeft={depth * 2}>
+          <Box flexDirection="row">
+            <Text color={glyphColor}>{`${glyph} `}</Text>
+            <Text color={COLORS.muted}>{`${type.padEnd(AGENT_TYPE_COLUMNS)} `}</Text>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text color={isQuiet || isDone ? COLORS.textMid : COLORS.text} dimColor={isQuiet} wrap="truncate-end">
+                {row.description}
+              </Text>
+            </Box>
+            <Box flexShrink={0} marginLeft={1}>
+              {row.status === 'running'
+                ? muted(formatElapsed(at - row.startedAt))
+                : <Text color={row.status === 'failed' || row.status === 'killed' ? COLORS.removed : COLORS.muted}>
+                    {AGENT_STATUS_WORD[row.status]}
+                  </Text>}
+            </Box>
+          </Box>
+          {!isDone && latest !== undefined && (
+            <Box marginLeft={2}>
+              <Text color={COLORS.muted} wrap="truncate-end">{`› ${latest}`}</Text>
+            </Box>
+          )}
+        </Box>
+      )
+    }
+    const agentsBody = () => (
+      <Box flexDirection="column">{agentTree(agents.rows).map(({ row, depth }) => agentRow(row, depth))}</Box>
     )
 
     // Usage
@@ -486,13 +566,15 @@ export function registerPanel(on: On, ttlMs: number): void {
         >
           {header}
           {status}
-          {section('usage', 'USAGE', null, muted(usd), usageBody)}
-          {rule(0)}
-          {section('files', 'FILES CHANGED', filesBadge, filesRight, filesBody)}
-          {rule(1)}
-          {section('tools', 'SKILLS & MCPS', null, muted(String(toolUses)), toolsBody)}
-          {rule(2)}
-          {section('assumptions', 'ASSUMPTIONS', assumptionsBadge, null, assumptionsBody)}
+          {[
+            agents.rows.length > 0 && section('agents', 'AGENTS', agentsBadge, agentsRight, agentsBody),
+            section('usage', 'USAGE', null, muted(usd), usageBody),
+            section('files', 'FILES CHANGED', filesBadge, filesRight, filesBody),
+            section('tools', 'SKILLS & MCPS', null, muted(String(toolUses)), toolsBody),
+            section('assumptions', 'ASSUMPTIONS', assumptionsBadge, null, assumptionsBody),
+          ]
+            .filter(shown => shown !== false)
+            .flatMap((shown, i) => (i === 0 ? [shown] : [rule(i), shown]))}
         </Box>
       </Box>
     )

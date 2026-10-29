@@ -8,10 +8,11 @@ import {
   applyTaskCreate,
   applyTaskUpdate,
   applyTodoWrite,
+  describeToolCall,
   relativePath,
 } from './model'
 import { saveSnapshot } from './thread'
-import { changeThread, setLimits, setTurnRunning } from './thread-state'
+import { changeThread, setAgentActivity, setLimits, setTurnRunning } from './thread-state'
 
 type Patch = readonly { lines: readonly string[] }[] | undefined
 
@@ -27,6 +28,10 @@ function contentLines(content: string): string[] {
 
 export function registerCollectors(on: On): void {
   on('tool.call', async ($, e, next) => {
+    // A subagent's latest call, shown under it in the Agents section.
+    if (e.agentId !== undefined) {
+      await setAgentActivity($, e.agentId, describeToolCall(e.tool, e as Record<string, unknown>, await $.session.cwd()))
+    }
     const ran = await next(e)
     if (ran.deny !== undefined || ran.isError === true) return ran
 

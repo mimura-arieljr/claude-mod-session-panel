@@ -4,10 +4,23 @@ export type FileEntry = { path: string; isNew: boolean; added: number; removed: 
 export type SkillUse = { name: string; count: number }
 export type McpUse = { server: string; tools: string[]; count: number }
 export type Assumption = { text: string; isFromAgent: boolean; at: number }
-export type SectionId = 'usage' | 'files' | 'tools' | 'assumptions'
+export type SectionId = 'agents' | 'usage' | 'files' | 'tools' | 'assumptions'
 export type RateLimit = { kind: string; percentUsed: number; resetsAt?: string }
 // The plan limits the session's last response reported, and when
 export type Limits = { windows: RateLimit[]; readAt: number }
+export type AgentStatus = 'pending' | 'running' | 'waiting' | 'idle' | 'completed' | 'failed' | 'killed'
+// One subagent or teammate as the panel last saw it
+export type AgentRow = {
+  id: string
+  type: string
+  description: string
+  status: AgentStatus
+  parentId?: string
+  startedAt: number
+  endedAt?: number
+}
+// The agents shown, and whether any still needs watching
+export type Agents = { rows: AgentRow[]; isWatching: boolean }
 export type PendingSwitch = 'clear' | 'resume' | null
 export type Thread = {
   sessionId: string
@@ -33,6 +46,9 @@ declare module 'claude-code' {
       // Ms epoch the current main-loop turn started
       turnStartedAt: number
       limits: Limits
+      agents: Agents
+      // Each agent's latest tool call, by agent id
+      agentActivity: Record<string, string>
       now: number
     }
   }

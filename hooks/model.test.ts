@@ -2,6 +2,9 @@ import { expect, test } from 'claude-code/testing'
 
 import {
   addMcp,
+  agentTree,
+  describeToolCall,
+  mergeAgents,
   addUsage,
   applyFileChange,
   applyTaskCreate,
@@ -163,4 +166,48 @@ test('a reset reads as a local time today, else a short weekday', async () => {
 test('ages read in minutes, then hours', async () => {
   expect(formatAge(6 * 60_000)).toBe('6m')
   expect(formatAge(90 * 60_000)).toBe('1h')
+})
+
+test("an agent's tool call reads as the tool and its main argument", async () => {
+  expect(describeToolCall('Read', { file_path: '/r/hooks/visuals.ts' }, '/r')).toBe('Read hooks/visuals.ts')
+  expect(describeToolCall('Bash', { command: 'npm test\nmore' }, '/r')).toBe('Bash npm test')
+  expect(describeToolCall('mcp__aws__run_script', { code: 'x' }, '/r')).toBe('aws·run_script')
+  expect(describeToolCall('Grep', { pattern: 'x'.repeat(80) }, '/r')).toHaveLength(60)
+})
+
+const listed = (id: string, status: string, parentId?: string) => ({
+  id,
+  type: 'Explore',
+  description: `task ${id}`,
+  status: status as 'running',
+  ...(parentId === undefined ? {} : { parentId }),
+})
+
+test('merging the agent list keeps start times and stamps the end', async () => {
+  const first = mergeAgents([], [listed('a', 'running')], 1000)
+  expect(first).toEqual([{ ...listed('a', 'running'), startedAt: 1000 }])
+  const done = mergeAgents(first, [listed('a', 'completed')], 5000)
+  expect(done[0]).toMatchObject({ status: 'completed', startedAt: 1000, endedAt: 5000 })
+  // Dropped by the engine after it ended: kept as it last stood.
+  expect(mergeAgents(done, [], 9000)).toEqual(done)
+})
+
+test('an agent the list drops mid-run is counted as completed', async () => {
+  const rows = mergeAgents([], [listed('a', 'running')], 1000)
+  expect(mergeAgents(rows, [], 3000)[0]).toMatchObject({ status: 'completed', endedAt: 3000 })
+})
+
+test('only the last three finished agents are kept', async () => {
+  let rows = mergeAgents([], ['a', 'b', 'c', 'd', 'e'].map(id => listed(id, 'running')), 0)
+  rows = mergeAgents(rows, [listed('a', 'completed'), listed('b', 'failed'), listed('c', 'killed'), listed('d', 'completed'), listed('e', 'running')], 10)
+  expect(rows.map(r => r.id)).toEqual(['b', 'c', 'd', 'e'])
+})
+
+test('agents nest under their parent, in start order', async () => {
+  const rows = mergeAgents([], [listed('a', 'running'), listed('b', 'running'), listed('c', 'running', 'a')], 0)
+  expect(agentTree(rows).map(({ row, depth }) => [row.id, depth])).toEqual([
+    ['a', 0],
+    ['c', 1],
+    ['b', 0],
+  ])
 })

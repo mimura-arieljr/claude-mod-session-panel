@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { StateDollar } from 'claude-code'
 
-import type { Limits, PendingSwitch, Thread } from '../types'
+import type { Agents, Limits, PendingSwitch, Thread } from '../types'
 import { emptyThread } from './model'
 
 // The engine only lets the file that defines an atom read or write it, so every access lives here.
@@ -17,6 +17,11 @@ const pendingSwitch = atom(
 const turnRunning = atom({ plugin: 'session-panel', key: 'turnRunning' } as const, false)
 const turnStartedAt = atom({ plugin: 'session-panel', key: 'turnStartedAt' } as const, 0)
 const limits = atom({ plugin: 'session-panel', key: 'limits' } as const, { windows: [], readAt: 0 } as Limits)
+const agents = atom({ plugin: 'session-panel', key: 'agents' } as const, { rows: [], isWatching: false } as Agents)
+const agentActivity = atom(
+  { plugin: 'session-panel', key: 'agentActivity' } as const,
+  {} as Record<string, string>,
+)
 const now = atom({ plugin: 'session-panel', key: 'now' } as const, 0)
 
 export function readThread($: StateDollar): Promise<Thread> {
@@ -57,6 +62,22 @@ export function readLimits($: StateDollar): Promise<Limits> {
 
 export function setLimits($: StateDollar, value: Limits): Promise<Limits> {
   return update($, limits, () => value)
+}
+
+export function readAgents($: StateDollar): Promise<Agents> {
+  return read($, agents)
+}
+
+export function changeAgents($: StateDollar, fn: (a: Agents) => Agents): Promise<Agents> {
+  return update($, agents, fn)
+}
+
+export function readAgentActivity($: StateDollar): Promise<Record<string, string>> {
+  return read($, agentActivity)
+}
+
+export function setAgentActivity($: StateDollar, agentId: string, text: string): Promise<Record<string, string>> {
+  return update($, agentActivity, current => ({ ...current, [agentId]: text }))
 }
 
 export function readNow($: StateDollar): Promise<number> {
