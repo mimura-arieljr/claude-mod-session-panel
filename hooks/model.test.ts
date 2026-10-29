@@ -13,13 +13,12 @@ import {
   formatTokens,
   formatUsd,
   parseTtl,
-  progress,
   relativePath,
   summarizeChange,
   toggleSection,
 } from './model'
 
-test('progress counts completed over total', async () => {
+test('todo writes keep the task in progress for the status line', async () => {
   const t = applyTodoWrite(emptyThread('s'), [
     { content: 'a', status: 'completed' },
     { content: 'b', status: 'completed' },
@@ -28,8 +27,7 @@ test('progress counts completed over total', async () => {
     { content: 'e', status: 'pending' },
     { content: 'f', status: 'pending' },
   ])
-  expect(progress(t)).toEqual({ done: 3, total: 6, percent: 50 })
-  expect(progress(emptyThread('s'))).toBe(null)
+  expect(t.todos.find(todo => todo.status === 'in_progress')?.text).toBe('d')
 })
 
 test('task tools build and update the list', async () => {
@@ -116,7 +114,7 @@ test('cache status counts down from the last reply', async () => {
   const H = 3_600_000
   expect(cacheStatus(null, 0, H, false)).toBe('–')
   expect(cacheStatus(0, 1, H, true)).toBe('warm')
-  expect(cacheStatus(0, 8 * 60_000 + 1, H, false)).toBe('warm · 52m left')
+  expect(cacheStatus(0, 8 * 60_000 + 1, H, false)).toBe('warm · 52m')
   expect(cacheStatus(0, H, H, false)).toBe('cold')
   expect(parseTtl('5m')).toBe(300_000)
   expect(parseTtl('60m')).toBe(H)

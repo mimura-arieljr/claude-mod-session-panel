@@ -15,6 +15,7 @@ const pendingSwitch = atom(
   null as PendingSwitch,
 )
 const turnRunning = atom({ plugin: 'session-panel', key: 'turnRunning' } as const, false)
+const turnStartedAt = atom({ plugin: 'session-panel', key: 'turnStartedAt' } as const, 0)
 const now = atom({ plugin: 'session-panel', key: 'now' } as const, 0)
 
 export function readThread($: StateDollar): Promise<Thread> {
@@ -39,6 +40,14 @@ export function readTurnRunning($: StateDollar): Promise<boolean> {
 
 export function setTurnRunning($: StateDollar, value: boolean): Promise<boolean> {
   return update($, turnRunning, () => value)
+}
+
+export function readTurnStartedAt($: StateDollar): Promise<number> {
+  return read($, turnStartedAt)
+}
+
+export function setTurnStartedAt($: StateDollar, value: number): Promise<number> {
+  return update($, turnStartedAt, () => value)
 }
 
 export function readNow($: StateDollar): Promise<number> {

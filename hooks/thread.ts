@@ -8,6 +8,7 @@ import {
   readThread,
   setPendingSwitch,
   setTurnRunning,
+  setTurnStartedAt,
 } from './thread-state'
 
 const MAX_THREADS = 50
@@ -84,6 +85,7 @@ export function registerThread(on: On): void {
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) {
       await syncThread($)
+      await setTurnStartedAt($, await $.clock.now())
       await setTurnRunning($, true)
     }
     return next(e)

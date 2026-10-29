@@ -4,7 +4,7 @@ export type FileEntry = { path: string; isNew: boolean; added: number; removed: 
 export type SkillUse = { name: string; count: number }
 export type McpUse = { server: string; tools: string[]; count: number }
 export type Assumption = { text: string; isFromAgent: boolean; at: number }
-export type SectionId = 'progress' | 'usage' | 'files' | 'tools' | 'assumptions'
+export type SectionId = 'usage' | 'files' | 'tools' | 'assumptions'
 export type PendingSwitch = 'clear' | 'resume' | null
 export type Thread = {
   sessionId: string
@@ -27,6 +27,8 @@ declare module 'claude-code' {
       thread: Shaped<Thread>
       pendingSwitch: PendingSwitch
       turnRunning: boolean
+      // Ms epoch the current main-loop turn started
+      turnStartedAt: number
       now: number
     }
   }

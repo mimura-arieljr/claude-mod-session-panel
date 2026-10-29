@@ -52,13 +52,6 @@ export function applyTaskUpdate(
   }
 }
 
-export function progress(t: Thread): { done: number; total: number; percent: number } | null {
-  const total = t.todos.length
-  if (total === 0) return null
-  const done = t.todos.filter(todo => todo.status === 'completed').length
-  return { done, total, percent: Math.round((done / total) * 100) }
-}
-
 const DECLARATIONS = [
   /\bfunction\s*\*?\s+([A-Za-z_$][\w$]*)/,
   /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*(?::\s*[^=]+)?=>|[A-Za-z_$][\w$]*\s*=>)/,
@@ -213,6 +206,12 @@ export function formatTokens(n: number): string {
   return `${oneDecimal(n / 1_000_000)}M`
 }
 
+// A running turn's time as m:ss.
+export function formatElapsed(ms: number): string {
+  const secs = Math.max(0, Math.floor(ms / 1000))
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
+}
+
 export function formatUsd(n: number): string {
   return `$${n.toFixed(2)}`
 }
@@ -236,7 +235,7 @@ export function cacheStatus(
   if (lastReplyAt === null) return '–'
   const left = lastReplyAt + ttlMs - now
   if (left <= 0) return 'cold'
-  return `warm · ${Math.ceil(left / 60_000)}m left`
+  return `warm · ${Math.ceil(left / 60_000)}m`
 }
 
 // What share of the cache lifetime is left: 1 while a turn runs, 0 when cold or unknown.

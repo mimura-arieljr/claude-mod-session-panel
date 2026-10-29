@@ -1,9 +1,16 @@
 import type { EngineInterface, On, RenderChildren } from 'claude-code'
 
-import type { SectionId, Todo } from '../types'
-import { cacheFraction, cacheStatus, formatTokens, formatUsd, progress, toggleSection } from './model'
-import { changeThread, readNow, readThread, readTurnRunning, setNow } from './thread-state'
-import { COLORS, diffCells, ringRows, ringSvg, splitPath } from './visuals'
+import type { FileEntry, SectionId } from '../types'
+import {
+  cacheFraction,
+  cacheStatus,
+  formatElapsed,
+  formatTokens,
+  formatUsd,
+  toggleSection,
+} from './model'
+import { changeThread, readNow, readThread, readTurnRunning, readTurnStartedAt, setNow } from './thread-state'
+import { COLORS, diffBar, diffCells, eighthBar, groupByFolder, splitPath } from './visuals'
 
 export const PANE = 'session-panel'
 const TITLE = 'Session'
@@ -11,49 +18,42 @@ const TITLE = 'Session'
 const DOCK_COLUMNS = 56
 const DOCK_MIN_TERMINAL = 110
 const MAX_ROWS = 10
-const RING_COLUMNS = 12
-const RING_ROWS = 6
-const FILE_BAR_CELLS = 7
-const SUMMARY_SQUARES = 5
+const FILE_BAR_CELLS = 10
+const SUMMARY_CELLS = 10
+// Usage rows: labels padded to one column so the bars start together.
+const LABEL_COLUMNS = 6
 // Inset outside and inside the rounded frame: one cell, just enough to show.
 const INSET_X = 1
 const INSET_Y = 1
-const GLYPH: Record<Todo['status'], string> = { completed: '✓', in_progress: '▸', pending: '○' }
-const TODO_COLOR: Record<Todo['status'], string> = {
-  completed: COLORS.added,
-  in_progress: COLORS.accent,
-  pending: COLORS.muted,
+const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+const SPIN_MS = 250
+// Single-width glyphs: emoji take two cells and break the row's alignment.
+const ICON: Record<SectionId, string> = {
+  usage: '∑',
+  files: '±',
+  tools: '✦',
+  assumptions: '≈',
 }
 
 // The engine draws the frame (close row, edges); the body is left unpainted so the inset shows through.
 const PANE_OPEN = { id: PANE, title: TITLE, columns: DOCK_COLUMNS, backgroundColor: 'transparent' }
 
 let tick: { cancel(): void } | undefined
-const rings = new Map<number, ReturnType<typeof ringRows>>()
 
-// Called from session.start: registers the command, opens the pane, starts the minute tick.
+// Called from session.start: registers the command, opens the pane, starts the clock tick.
 export async function setupPanel($: EngineInterface): Promise<void> {
   await $.command.register({ name: 'session-panel', description: 'Show or hide the session panel' })
   void $.ui.open(PANE_OPEN)
   tick?.cancel()
-  tick = $.clock.every(60_000, async () => {
-    await setNow($, await $.clock.now())
+  tick = $.clock.every(SPIN_MS, async () => {
+    const [at, isTurnRunning, last] = await Promise.all([$.clock.now(), readTurnRunning($), readNow($)])
+    // Each spinner frame while a turn runs, else once a minute for the cache countdown.
+    if (isTurnRunning || Math.floor(at / 60_000) !== Math.floor(last / 60_000)) await setNow($, at)
   })
 }
 
 function more<T>(list: readonly T[]): { shown: readonly T[]; hidden: number } {
   return { shown: list.slice(0, MAX_ROWS), hidden: Math.max(0, list.length - MAX_ROWS) }
-}
-
-// The ring's text rows, kept per whole percent.
-function ring(percent: number): ReturnType<typeof ringRows> {
-  const key = Math.round(percent)
-  let drawn = rings.get(key)
-  if (drawn === undefined) {
-    drawn = ringRows(key, RING_COLUMNS, RING_ROWS)
-    rings.set(key, drawn)
-  }
-  return drawn
 }
 
 // Says where the pane went, and what docks it beside the chat when it didn't.
@@ -83,31 +83,23 @@ export function registerPanel(on: On, ttlMs: number): void {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Button, Text } = $.ui.resolve(e)
-    // Reading `now` subscribes the pane to the minute tick.
-    const [t, isTurnRunning, , at, { context, cost }] = await Promise.all([
+    const { Box, Button, Link, Text } = $.ui.resolve(e)
+    // Reading `now` subscribes the pane to the clock tick.
+    const [t, isTurnRunning, turnStartedAt, , at, cwd, { context, cost }] = await Promise.all([
       readThread($),
       readTurnRunning($),
+      readTurnStartedAt($),
       readNow($),
       $.clock.now(),
+      $.session.cwd(),
       $.session.usage(),
     ])
-    // Cells for the cards: the body less both insets and the border.
-    const innerColumns = Math.max(0, e.props.bodyColumns - INSET_X * 4 - 2)
-    const barCells = Math.max(8, Math.min(28, innerColumns - 18))
+    // Cells inside the frame: the body less both insets and the border.
+    const contentColumns = Math.max(0, e.props.bodyColumns - INSET_X * 4 - 2)
+    const barCells = Math.max(8, Math.min(24, contentColumns - 24))
 
-    const label = (text: string) => (
-      <Text color={COLORS.muted} bold>
-        {text}
-      </Text>
-    )
     const muted = (text: string) => <Text color={COLORS.muted}>{text}</Text>
-    const bar = (filled: number, total: number, color: string) => (
-      <Text>
-        <Text color={color}>{'━'.repeat(filled)}</Text>
-        <Text color={COLORS.track}>{'━'.repeat(Math.max(0, total - filled))}</Text>
-      </Text>
-    )
+    const rowLabel = (text: string) => <Text color={COLORS.muted}>{text.padEnd(LABEL_COLUMNS)}</Text>
     const moreRow = (hidden: number) => hidden > 0 && muted(`+${hidden} more`)
     const empty = (hint: string) => (
       <Box flexDirection="column" borderStyle="round" borderColor={COLORS.dashed} paddingX={1}>
@@ -127,7 +119,7 @@ export function registerPanel(on: On, ttlMs: number): void {
     ) => {
       const isCollapsed = t.collapsed.includes(id)
       return (
-        <Box key={id} flexDirection="column" backgroundColor={COLORS.card} paddingX={1} paddingY={1}>
+        <Box key={id} flexDirection="column">
           {/* Keyed so hover turns the title cyan; the pointer's inversion then highlights in cyan. */}
           <Box key={`head-${id}`} flexDirection="row" justifyContent="space-between">
             <Box flexDirection="row">
@@ -141,6 +133,9 @@ export function registerPanel(on: On, ttlMs: number): void {
                 <Text color={COLORS.muted} hover={{ color: COLORS.accent }}>
                   {isCollapsed ? '▸ ' : '▾ '}
                 </Text>
+                <Text color={COLORS.accent} hover={{ color: COLORS.accent }}>
+                  {`${ICON[id]} `}
+                </Text>
                 <Text color={COLORS.label} bold hover={{ color: COLORS.accent }}>
                   {title}
                 </Text>
@@ -149,10 +144,21 @@ export function registerPanel(on: On, ttlMs: number): void {
             </Box>
             {right}
           </Box>
-          {!isCollapsed && body()}
+          {!isCollapsed && (
+            <Box flexDirection="column" marginTop={1}>
+              {body()}
+            </Box>
+          )}
         </Box>
       )
     }
+
+    // A dim line between sections.
+    const rule = (n: number) => (
+      <Text key={`rule-${n}`} color={COLORS.rule}>
+        {'─'.repeat(contentColumns)}
+      </Text>
+    )
 
     // Header: the panel's name.
     const header = (
@@ -168,112 +174,75 @@ export function registerPanel(on: On, ttlMs: number): void {
       </Box>
     )
 
-    // Progress
-    const p = progress(t)
+    // Status line: a spinner and the turn's time while working.
     const current = t.todos.find(todo => todo.status === 'in_progress')
-    const progressBody = () => {
-      const { shown, hidden } = more(t.todos)
-      return (
-        <Box flexDirection="column" marginTop={1}>
-          <Box flexDirection="row">
-            {isTurnRunning ? (
-              <Text backgroundColor={COLORS.accentTint} color={COLORS.accent} bold>
-                {' ✳ '}
+    const status = (
+      <Box flexDirection="row" justifyContent="space-between" backgroundColor={COLORS.raised} paddingX={1}>
+        {isTurnRunning ? (
+          <Box flexShrink={1}>
+            <Text wrap="truncate-end">
+              <Text color={COLORS.accent}>{'● '}</Text>
+              <Text color={COLORS.accent} bold>
+                WORKING
               </Text>
-            ) : (
-              <Text backgroundColor={COLORS.idleTint} color={COLORS.label} bold>
-                {' ⏸ '}
+              {'  '}
+              <Text color={COLORS.accent}>{SPIN[Math.floor(at / SPIN_MS) % SPIN.length]!}</Text>{' '}
+              <Text color={COLORS.textMid} italic>
+                {current?.text ?? 'Thinking…'}
               </Text>
-            )}
-            <Box flexDirection="column" marginLeft={1} flexShrink={1}>
-              <Text color={COLORS.text} bold>
-                {isTurnRunning ? 'Working' : 'Idle'}
-              </Text>
-              {muted(
-                isTurnRunning ? (current?.text ?? 'Thinking…') : 'Waiting for your next message',
-              )}
-            </Box>
+            </Text>
           </Box>
-          {p !== null && (
-            <Box flexDirection="column" marginTop={1}>
-              <Text>
-                {bar(Math.round((p.percent / 100) * barCells), barCells, COLORS.accent)}
-                <Text color={COLORS.label}>{`  ${p.done}/${p.total} · ${p.percent}%`}</Text>
-              </Text>
-              {shown.map(todo => (
-                <Text key={`todo-${todo.id}`}>
-                  <Text color={TODO_COLOR[todo.status]}>{`${GLYPH[todo.status]} `}</Text>
-                  <Text color={todo.status === 'pending' ? COLORS.muted : COLORS.textMid}>
-                    {todo.text}
-                  </Text>
-                </Text>
-              ))}
-              {moreRow(hidden)}
-            </Box>
-          )}
-        </Box>
-      )
-    }
-    const progressRight = muted(
-      p !== null ? `${p.done}/${p.total} · ${p.percent}%` : isTurnRunning ? 'running' : 'idle',
+        ) : (
+          <Text>
+            <Text color={COLORS.muted}>{'● '}</Text>
+            <Text color={COLORS.label} bold>
+              IDLE
+            </Text>
+            <Text color={COLORS.muted}>{'  waiting for input'}</Text>
+          </Text>
+        )}
+        {isTurnRunning && (
+          <Box flexShrink={0} marginLeft={1}>
+            {muted(formatElapsed(at - turnStartedAt))}
+          </Box>
+        )}
+      </Box>
     )
 
     // Usage
     const work = formatTokens(t.work.input + t.work.output)
     const usd = formatUsd(cost?.usd ?? 0)
     const cache = cacheStatus(t.lastReplyAt, at, ttlMs, isTurnRunning)
-    const cacheShare = cacheFraction(t.lastReplyAt, at, ttlMs, isTurnRunning)
+    const cacheCells = Math.round(cacheFraction(t.lastReplyAt, at, ttlMs, isTurnRunning) * barCells)
     const percent = context?.percent ?? 0
-    // The terminal draws a braille ring as colored text; desktop, editor and mobile draw the design's SVG.
-    const contextRing = () => {
-      if (e.surface === 'terminal') {
-        return (
-          <Box key="context-ring" flexDirection="column">
-            {ring(percent).map((runs, row) => (
-              <Text key={`ring-${row}`}>
-                {runs.map((run, k) => (
-                  <Text key={`ring-${row}-${k}`} color={run.color}>
-                    {run.text}
-                  </Text>
-                ))}
-              </Text>
-            ))}
-          </Box>
-        )
-      }
-      const { Svg } = $.ui.resolve(e)
-      return <Svg source={ringSvg(percent)} alt={`${percent}% context`} width={104} height={104} />
-    }
+    const contextFill = eighthBar(percent / 100, barCells)
     const usageBody = () => (
-      <Box flexDirection="column" marginTop={1}>
-        <Box flexDirection="row">
-          <Box flexDirection="column" alignItems="center">
-            {contextRing()}
-            <Text>
-              <Text color={COLORS.label}>
-                {context?.tokens === undefined ? '–' : formatTokens(context.tokens)}
-              </Text>
-              <Text color={COLORS.muted}>{` / ${formatTokens(context?.window ?? 0)}`}</Text>
-            </Text>
-          </Box>
-          <Box flexDirection="column" marginLeft={2} flexGrow={1}>
-            {label('WORK')}
-            <Text>
-              <Text color={COLORS.text} bold>
-                {work}
-              </Text>
-              <Text color={COLORS.muted}> tokens</Text>
-            </Text>
-            <Box marginTop={1}>{label('COST')}</Box>
-            <Text color={COLORS.text} bold>
-              {usd}
-            </Text>
-            <Box marginTop={1} flexDirection="row" justifyContent="space-between">
-              {label('CACHE')}
-              <Text color={COLORS.amber}>{cache}</Text>
-            </Box>
-            {bar(Math.round(cacheShare * barCells), barCells, COLORS.amber)}
-          </Box>
+      <Box flexDirection="column">
+        <Box flexDirection="row" justifyContent="space-between">
+          <Text>
+            {rowLabel('ctx')}
+            <Text color={COLORS.accent}>{contextFill}</Text>
+            <Text color={COLORS.track}>{'░'.repeat(Math.max(0, barCells - contextFill.length))}</Text>
+            <Text color={COLORS.text}>{` ${Math.round(percent)}%`}</Text>
+          </Text>
+          {muted(
+            `${context?.tokens === undefined ? '–' : formatTokens(context.tokens)}/${formatTokens(context?.window ?? 0)}`,
+          )}
+        </Box>
+        <Text>
+          {rowLabel('work')}
+          <Text color={COLORS.text} bold>
+            {work}
+          </Text>
+          <Text color={COLORS.muted}> tokens</Text>
+        </Text>
+        <Box flexDirection="row" justifyContent="space-between">
+          <Text>
+            {rowLabel('cache')}
+            <Text color={COLORS.amber}>{'━'.repeat(cacheCells)}</Text>
+            <Text color={COLORS.track}>{'┄'.repeat(barCells - cacheCells)}</Text>
+          </Text>
+          <Text color={COLORS.amber}>{cache}</Text>
         </Box>
         {t.isTrackingSinceResume && muted('tracking since resume')}
       </Box>
@@ -282,10 +251,10 @@ export function registerPanel(on: On, ttlMs: number): void {
     // Files changed
     const added = t.files.reduce((sum, file) => sum + file.added, 0)
     const removed = t.files.reduce((sum, file) => sum + file.removed, 0)
-    const squares = diffCells(added, removed, SUMMARY_SQUARES)
+    const cells = diffCells(added, removed, SUMMARY_CELLS)
     const filesBadge = (
-      <Text backgroundColor={COLORS.badge} color={COLORS.text} bold>
-        {` ${t.files.length} `}
+      <Text color={COLORS.text} bold>
+        {String(t.files.length)}
       </Text>
     )
     const filesRight =
@@ -294,62 +263,73 @@ export function registerPanel(on: On, ttlMs: number): void {
       ) : (
         <Text>
           <Text color={COLORS.added}>{`+${added}`}</Text>
-          <Text color={COLORS.removed}>{` −${removed} `}</Text>
-          <Text color={COLORS.added}>{'■'.repeat(squares.plus)}</Text>
-          <Text color={COLORS.removed}>{'■'.repeat(squares.minus)}</Text>
+          {removed > 0 && <Text color={COLORS.removed}>{`  −${removed}`}</Text>}
+          {'  '}
+          <Text color={COLORS.added}>{'█'.repeat(cells.plus)}</Text>
+          <Text color={COLORS.removed}>{'█'.repeat(cells.minus)}</Text>
         </Text>
       )
+    const fileRow = (file: FileEntry, largest: number) => {
+      const { name } = splitPath(file.path)
+      const bar = diffBar(file.added, file.removed, largest, FILE_BAR_CELLS)
+      const path = file.path.startsWith('/') ? file.path : `${cwd}/${file.path}`
+      return (
+        <Box key={file.path} flexDirection="column">
+          <Box flexDirection="row">
+            <Box flexGrow={1} flexShrink={1} marginLeft={2}>
+              <Text wrap="truncate-end">
+                <Text color={file.isNew ? COLORS.added : COLORS.amber} bold>
+                  {file.isNew ? '+' : '~'}
+                </Text>{' '}
+                <Link href={`file://${encodeURI(path)}`}>
+                  <Text color={COLORS.text}>{name}</Text>
+                </Link>
+                {file.isNew && ' '}
+                {file.isNew && (
+                  <Text color={COLORS.added} bold>
+                    NEW
+                  </Text>
+                )}
+              </Text>
+            </Box>
+            {/* Counts and bar in fixed columns so every row lines up. */}
+            <Box flexShrink={0}>
+              <Text>
+                <Text color={COLORS.added}>{`+${file.added}`.padStart(5)}</Text>
+                <Text color={COLORS.removed}>{(file.removed > 0 ? `−${file.removed}` : '').padStart(5)}</Text>
+                {'  '}
+                <Text color={COLORS.added}>{bar.plus}</Text>
+                <Text color={COLORS.removed}>{bar.minus}</Text>
+                {' '.repeat(Math.max(0, FILE_BAR_CELLS - bar.plus.length - bar.minus.length))}
+              </Text>
+            </Box>
+          </Box>
+          {file.notes.length > 0 && (
+            <Box marginLeft={4}>
+              <Text color={COLORS.muted} wrap="truncate-end">
+                {`› ${file.notes.join(' · ')}`}
+              </Text>
+            </Box>
+          )}
+        </Box>
+      )
+    }
     const filesBody = () => {
       if (t.files.length === 0) return empty('Files Claude edits appear here.')
       const { shown, hidden } = more(t.files)
+      const largest = Math.max(0, ...shown.map(file => file.added + file.removed))
       return (
-        <Box flexDirection="column">
-          {shown.map(file => {
-            const { name, dir } = splitPath(file.path)
-            const cells = diffCells(file.added, file.removed, FILE_BAR_CELLS)
-            const tint = file.isNew ? COLORS.added : COLORS.amber
-            const tintBg = file.isNew ? COLORS.addedTint : COLORS.amberTint
-            return (
-              <Box key={file.path} flexDirection="row" alignItems="flex-start" marginTop={1}>
-                <Box flexShrink={0}>
-                  <Text backgroundColor={tintBg} color={tint} bold>
-                    {file.isNew ? ' + ' : ' ~ '}
-                  </Text>
-                </Box>
-                <Box flexDirection="column" marginLeft={1} flexGrow={1} flexShrink={1}>
-                  <Text wrap="truncate-end">
-                    <Text color={COLORS.text} bold>
-                      {name}
-                    </Text>{' '}
-                    <Text backgroundColor={tintBg} color={tint} bold>
-                      {file.isNew ? ' NEW ' : ' EDIT '}
-                    </Text>
-                  </Text>
-                  {dir !== '' && (
-                    <Text color={COLORS.muted} wrap="truncate-start">
-                      {dir}
-                    </Text>
-                  )}
-                  {file.notes.length > 0 && (
-                    <Text color={COLORS.textMid} wrap="truncate-end">
-                      <Text color={COLORS.muted}>{'› '}</Text>
-                      {file.notes.join(' · ')}
-                    </Text>
-                  )}
-                </Box>
-                <Box flexDirection="column" alignItems="flex-end" marginLeft={1} flexShrink={0}>
-                  <Text>
-                    <Text color={COLORS.added}>{`+${file.added}`}</Text>
-                    {file.removed > 0 && <Text color={COLORS.removed}>{` −${file.removed}`}</Text>}
-                  </Text>
-                  <Text>
-                    <Text color={COLORS.added}>{'▬'.repeat(cells.plus)}</Text>
-                    <Text color={COLORS.removed}>{'▬'.repeat(cells.minus)}</Text>
-                  </Text>
-                </Box>
+        <Box flexDirection="column" gap={1}>
+          {groupByFolder(shown).map(group => (
+            <Box key={`dir-${group.dir}`} flexDirection="column">
+              <Text color={COLORS.muted} wrap="truncate-start">
+                {group.dir === '' ? './' : group.dir}
+              </Text>
+              <Box flexDirection="column" gap={1}>
+                {group.files.map(file => fileRow(file, largest))}
               </Box>
-            )
-          })}
+            </Box>
+          ))}
           {moreRow(hidden)}
         </Box>
       )
@@ -384,31 +364,34 @@ export function registerPanel(on: On, ttlMs: number): void {
       )
     }
 
-    // Assumptions
+    // Assumptions: the only rows with a fill.
     const assumptionsBadge = (
-      <Text backgroundColor={COLORS.amberTint} color={COLORS.amber} bold>
-        {` ${t.assumptions.length} `}
+      <Text color={COLORS.amber} bold>
+        {String(t.assumptions.length)}
       </Text>
     )
     const assumptionsBody = () => {
       if (t.assumptions.length === 0) return empty('Things Claude assumes appear here.')
       const { shown, hidden } = more(t.assumptions)
       return (
-        <Box flexDirection="column">
+        <Box flexDirection="column" gap={1}>
           {shown.map((a, i) => (
             <Box
               key={`assumption-${a.at}-${i}`}
               flexDirection="row"
-              backgroundColor={COLORS.raised}
+              backgroundColor={COLORS.assumptionFill}
               paddingX={1}
-              marginTop={1}
             >
               <Text color={COLORS.amber} bold>
                 {String(t.assumptions.length - i).padStart(2, '0')}
               </Text>
               <Box marginLeft={1} flexShrink={1}>
-                <Text color={COLORS.textSoft}>
-                  {a.isFromAgent && <Text color={COLORS.muted}>(agent) </Text>}
+                <Text color={COLORS.assumptionText}>
+                  {a.isFromAgent && (
+                    <Text color={COLORS.muted} italic>
+                      (agent){' '}
+                    </Text>
+                  )}
                   {a.text}
                 </Text>
               </Box>
@@ -432,10 +415,13 @@ export function registerPanel(on: On, ttlMs: number): void {
           borderColor={COLORS.frame}
         >
           {header}
-          {section('progress', 'PROGRESS', null, progressRight, progressBody)}
+          {status}
           {section('usage', 'USAGE', null, muted(usd), usageBody)}
+          {rule(0)}
           {section('files', 'FILES CHANGED', filesBadge, filesRight, filesBody)}
+          {rule(1)}
           {section('tools', 'SKILLS & MCPS', null, muted(String(toolUses)), toolsBody)}
+          {rule(2)}
           {section('assumptions', 'ASSUMPTIONS', assumptionsBadge, null, assumptionsBody)}
         </Box>
       </Box>

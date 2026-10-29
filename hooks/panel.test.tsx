@@ -31,9 +31,12 @@ function engine(on: On) {
     },
   }))
   on('turn.complete', () => ({ text: '' }))
-  on('tool.call', (_, e) => ({
-    result: { filePath: String((e as { file_path?: unknown }).file_path ?? ''), structuredPatch: [{ lines: ['+x'] }] },
-  }))
+  on('tool.call', (_, e) => {
+    const filePath = String((e as { file_path?: unknown }).file_path ?? '')
+    // A Write creates its file, as the engine reports one.
+    if (e.tool === 'Write') return { result: { type: 'create', filePath, structuredPatch: [] } }
+    return { result: { filePath, structuredPatch: [{ lines: ['+x'] }] } }
+  })
   mock.store(on)
   return mock.clock(on)
 }
@@ -44,14 +47,17 @@ const SIX_TODOS = ['a', 'b', 'c', 'd', 'e', 'f'].map((content, i) => ({
   status: i < 3 ? 'completed' : i === 3 ? 'in_progress' : 'pending',
 })) as { content: string; activeForm: string; status: 'completed' | 'in_progress' | 'pending' }[]
 
-test('all sections start expanded', async ($, on) => {
+test('all sections start expanded, with no progress section', async ($, on) => {
   engine(on)
+  await $.tool.call({ tool: 'TodoWrite', todos: SIX_TODOS })
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    for (const title of ['PROGRESS', 'USAGE', 'FILES CHANGED', 'SKILLS & MCPS', 'ASSUMPTIONS']) {
-      expect(await ui.find({ text: new RegExp(`▾ ${title}`) })).toBeDefined()
+    for (const title of ['USAGE', 'FILES CHANGED', 'SKILLS & MCPS', 'ASSUMPTIONS']) {
+      expect(await ui.find({ text: new RegExp(`▾ \\S ${title}`) })).toBeDefined()
     }
-    expect(await ui.find({ text: /Waiting for your next message/ })).toBeDefined()
+    expect(await ui.find({ text: /PROGRESS/ })).toBeUndefined()
+    expect(await ui.find({ text: /IDLE/ })).toBeDefined()
+    expect(await ui.find({ text: /waiting for input/ })).toBeDefined()
     expect(await ui.find({ text: /None yet/ })).toBeDefined()
     await ui.unmount()
   }
@@ -59,21 +65,31 @@ test('all sections start expanded', async ($, on) => {
 
 test('pressing a title collapses it and keeps its summary', async ($, on) => {
   engine(on)
-  await $.tool.call({ tool: 'TodoWrite', todos: SIX_TODOS })
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect(await ui.find({ text: /▸ d/ })).toBeDefined()
-    await ui.press({ key: 'toggle-progress' })
-    expect(await ui.find({ text: /▸ PROGRESS/ })).toBeDefined()
-    expect(await ui.find({ text: /3\/6 · 50%/ })).toBeDefined()
-    expect(await ui.find({ text: /▸ d/ })).toBeUndefined()
-    await ui.press({ key: 'toggle-progress' })
-    expect(await ui.find({ text: /▾ PROGRESS/ })).toBeDefined()
+    expect(await ui.find({ text: /^ctx/ })).toBeDefined()
+    await ui.press({ key: 'toggle-usage' })
+    expect(await ui.find({ text: /▸ ∑ USAGE/ })).toBeDefined()
+    expect(await ui.find({ text: /\$1\.24/ })).toBeDefined()
+    expect(await ui.find({ text: /^ctx/ })).toBeUndefined()
+    await ui.press({ key: 'toggle-usage' })
+    expect(await ui.find({ text: /▾ ∑ USAGE/ })).toBeDefined()
     await ui.unmount()
   }
 })
 
-test('usage shows the context ring, work tokens, cost and cache', async ($, on) => {
+test('the status line names the task in progress', async ($, on) => {
+  const clock = engine(on)
+  on('turn.start', (_, e) => ({ text: e.text, turnId: e.turnId }))
+  await $.turn.start({ text: 'hi', turnId: 't' })
+  await $.tool.call({ tool: 'TodoWrite', todos: SIX_TODOS })
+  await clock.advance(1000)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /^d$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('usage shows the context bar, work tokens, cost and cache', async ($, on) => {
   const clock = engine(on)
   await $.turn.complete({
     ...BASE_TURN,
@@ -89,36 +105,64 @@ test('usage shows the context ring, work tokens, cost and cache', async ($, on) 
   await clock.advance(8 * 60_000 + 1)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    // The terminal draws a braille Raster; other surfaces draw the SVG ring.
+    // Text bars on every surface: no ring image or SVG.
     const drawn = JSON.stringify(await ui.drawn())
-    if (surface === 'terminal') {
-      // Plain colored text, not a Raster: the terminal re-quantizes Raster colors.
-      expect(drawn).not.toContain('"Raster"')
-      expect(drawn).toContain('14%')
-    } else {
-      expect(drawn).toContain('14% context')
-    }
-    expect(await ui.find({ text: /142k \/ 1M/ })).toBeDefined()
-    expect(await ui.find({ text: /38\.2k tokens/ })).toBeDefined()
+    expect(drawn).not.toContain('"Svg"')
+    expect(drawn).not.toContain('"Raster"')
+    expect(await ui.find({ text: /^ctx/ })).toBeDefined()
+    expect(await ui.find({ text: /14%/ })).toBeDefined()
+    expect(await ui.find({ text: /142k\/1M/ })).toBeDefined()
+    expect(await ui.find({ text: /38\.2k/ })).toBeDefined()
     expect(await ui.find({ text: /\$1\.24/ })).toBeDefined()
-    expect(await ui.find({ text: /warm · 52m left/ })).toBeDefined()
+    expect(await ui.find({ text: /warm · 52m$/ })).toBeDefined()
     await ui.unmount()
   }
 })
 
-test('a file row shows its name, tag, folder and counts', async ($, on) => {
+test('files group under their folder, edits marked ~ with no tag, names linked', async ($, on) => {
   engine(on)
-  await $.tool.call({
-    tool: 'Edit',
-    file_path: '/r/src/deep/dir/a.ts',
-    old_string: 'a',
-    new_string: 'b',
-  })
+  for (const name of ['a.ts', 'b.ts']) {
+    await $.tool.call({ tool: 'Edit', file_path: `/r/src/deep/dir/${name}`, old_string: 'a', new_string: 'b' })
+  }
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ text: /a\.ts/ })).toBeDefined()
-  expect(await ui.find({ text: /EDIT/ })).toBeDefined()
-  expect(await ui.find({ text: /…\/deep\/dir\// })).toBeDefined()
-  expect(await ui.find({ text: /src\/deep\/dir\/a\.ts/ })).toBeUndefined()
+  const drawn = JSON.stringify(await ui.drawn())
+  expect(drawn.match(/"children":\["…\/deep\/dir\/"\]/g)).toHaveLength(1)
+  expect(await ui.find({ text: /^~$/ })).toBeDefined()
+  expect(await ui.find({ text: /EDIT/ })).toBeUndefined()
+  expect(drawn).toContain('"href":"file:///r/src/deep/dir/a.ts"')
+  expect(await ui.find({ text: /^ +\+1$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a new file carries a NEW tag with no background fill', async ($, on) => {
+  engine(on)
+  await $.tool.call({ tool: 'Write', file_path: '/r/n.ts', content: 'x' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const tag = (await ui.find({ text: /^NEW$/ })) as { props?: Record<string, unknown> } | undefined
+  expect(tag).toBeDefined()
+  expect(tag?.props?.backgroundColor).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a running turn shows a spinner and the time since it started', async ($, on) => {
+  const clock = engine(on)
+  on('turn.start', (_, e) => ({ text: e.text, turnId: e.turnId }))
+  await $.turn.start({ text: 'hi', turnId: 't' })
+  await clock.advance(12_000)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /WORKING/ })).toBeDefined()
+  expect(await ui.find({ text: /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]$/ })).toBeDefined()
+  expect(await ui.find({ text: /^0:12$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('only assumption rows carry the amber fill', async ($, on) => {
+  engine(on)
+  await $.tool.call({ tool: 'mcp__session-panel__note_assumption', assumption: 'x' } as never)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const drawn = JSON.stringify(await ui.drawn())
+  expect(drawn.match(/"backgroundColor":"#262318"/g)).toHaveLength(1)
+  expect(drawn).not.toContain('"backgroundColor":"#3B362F"')
   await ui.unmount()
 })
 
@@ -128,7 +172,7 @@ test('long lists cap at 10', async ($, on) => {
     await $.tool.call({ tool: 'Edit', file_path: `/r/f${i}.ts`, old_string: 'a', new_string: 'b' })
   }
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ text: /^ 13 $/ })).toBeDefined()
+  expect(await ui.find({ text: /^13$/ })).toBeDefined()
   expect(await ui.find({ text: /\+3 more/ })).toBeDefined()
   expect(await ui.find({ text: /f12\.ts/ })).toBeUndefined()
   await ui.unmount()
@@ -200,7 +244,7 @@ test('the panel paints nothing outside its frame', async ($, on) => {
   const root = (await ui.drawn()) as Node
   expect(root.props?.backgroundColor).toBeUndefined()
   expect(root.props?.minHeight).toBe(80)
-  expect(root.children?.[0]?.props?.backgroundColor).toBe('#101317')
+  expect(root.children?.[0]?.props?.backgroundColor).toBe('#1A1D24')
   await ui.unmount()
 })
 
@@ -216,13 +260,13 @@ test('the pane opens on a transparent body', async ($, on) => {
   expect(opened).toEqual([expect.objectContaining({ backgroundColor: 'transparent' })])
 })
 
-test('sections are borderless cards spaced apart, no divider lines', async ($, on) => {
+test('sections sit on the frame, split by dim rules', async ($, on) => {
   engine(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const drawn = JSON.stringify(await ui.drawn())
-  expect(drawn).not.toContain('"borderStyle":"round","borderColor":"#2A2F3A"')
-  expect(drawn).not.toContain('"key":"divider-')
-  expect(drawn).not.toContain('────')
+  // Rules span the frame's inside: 60 less the inset (2), the padding (2) and the border (2).
+  expect(drawn.match(new RegExp(`"color":"#2A2F3A"\\},"children":\\["${'─'.repeat(54)}"\\]`, 'g'))).toHaveLength(3)
+  expect(drawn.match(/"backgroundColor":"#1A1D24"/g)).toHaveLength(1)
   await ui.unmount()
 })
 
@@ -239,11 +283,11 @@ test('the panel sits in a rounded frame inset on every side', async ($, on) => {
   await ui.unmount()
 })
 
-test('the header has no status pill', async ($, on) => {
+test('the status sits on its own line under the header', async ($, on) => {
   engine(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ text: /Session/ })).toBeDefined()
-  expect(await ui.find({ text: /● (IDLE|WORKING)/ })).toBeUndefined()
+  expect(await ui.find({ text: /^❯_ Session$/ })).toBeDefined()
+  expect(await ui.find({ text: /^● +IDLE +waiting for input$/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -260,7 +304,17 @@ test('section titles turn cyan under the pointer, the badge outside the press', 
     n.children?.forEach(walk)
   }
   walk((await ui.drawn()) as Node)
-  expect(buttons.length).toBe(5)
+  expect(buttons.length).toBe(4)
   for (const b of buttons) expect(JSON.stringify(b)).not.toContain('#262A35')
+  await ui.unmount()
+})
+
+test('each section title has a cyan icon beside it', async ($, on) => {
+  engine(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const drawn = JSON.stringify(await ui.drawn())
+  for (const icon of ['∑', '±', '✦', '≈']) {
+    expect(drawn).toContain(`"props":{"color":"#4FD1C5"},"hover":{"color":"#4FD1C5"},"children":["${icon} "]`)
+  }
   await ui.unmount()
 })

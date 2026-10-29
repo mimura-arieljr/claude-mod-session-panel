@@ -1,6 +1,6 @@
 {
   "name": "session-panel",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Pane showing progress, usage, changed files, tools and assumptions for the current thread",
   "types": "./types/index.d.ts",
   "userConfig": {
