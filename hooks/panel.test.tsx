@@ -119,7 +119,7 @@ test('usage shows the context bar, work tokens, cost and cache', async ($, on) =
   }
 })
 
-test('files group under their folder, edits marked ~ with no tag, names linked', async ($, on) => {
+test('files group under their folder, edits marked ~ with no tag', async ($, on) => {
   engine(on)
   for (const name of ['a.ts', 'b.ts']) {
     await $.tool.call({ tool: 'Edit', file_path: `/r/src/deep/dir/${name}`, old_string: 'a', new_string: 'b' })
@@ -127,9 +127,8 @@ test('files group under their folder, edits marked ~ with no tag, names linked',
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const drawn = JSON.stringify(await ui.drawn())
   expect(drawn.match(/"children":\["…\/deep\/dir\/"\]/g)).toHaveLength(1)
-  expect(await ui.find({ text: /^~$/ })).toBeDefined()
+  expect(await ui.find({ text: /^~ $/ })).toBeDefined()
   expect(await ui.find({ text: /EDIT/ })).toBeUndefined()
-  expect(drawn).toContain('"href":"file:///r/src/deep/dir/a.ts"')
   expect(await ui.find({ text: /^ +\+1$/ })).toBeDefined()
   await ui.unmount()
 })
@@ -316,5 +315,19 @@ test('each section title has a cyan icon beside it', async ($, on) => {
   for (const icon of ['∑', '±', '✦', '≈']) {
     expect(drawn).toContain(`"props":{"color":"#4FD1C5"},"hover":{"color":"#4FD1C5"},"children":["${icon} "]`)
   }
+  await ui.unmount()
+})
+
+test('pressing a file name opens it in VS Code', async ($, on) => {
+  engine(on)
+  const ran: (readonly string[])[] = []
+  on('process.run', (_, e) => {
+    ran.push(e.argv)
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  await $.tool.call({ tool: 'Edit', file_path: '/r/src/my file.ts', old_string: 'a', new_string: 'b' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'open-src/my file.ts' })
+  expect(ran).toEqual([['open', 'vscode://file/r/src/my%20file.ts']])
   await ui.unmount()
 })

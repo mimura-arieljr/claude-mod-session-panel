@@ -52,6 +52,23 @@ export async function setupPanel($: EngineInterface): Promise<void> {
   })
 }
 
+// Opens a file in VS Code through its vscode:// handler: `open` on macOS, `xdg-open` elsewhere.
+async function openInVsCode($: Pick<EngineInterface, 'process' | 'ui'>, path: string): Promise<void> {
+  const url = `vscode://file${encodeURI(path)}`
+  let reason = ''
+  for (const opener of ['open', 'xdg-open']) {
+    try {
+      const { exitCode, stderr } = await $.process.run([opener, url])
+      if (exitCode === 0) return
+      reason = stderr.trim()
+      break
+    } catch {
+      // That opener isn't on this system: try the next.
+    }
+  }
+  $.ui.toast(`Couldn't open ${path} in VS Code${reason === '' ? '' : `: ${reason}`}`)
+}
+
 function more<T>(list: readonly T[]): { shown: readonly T[]; hidden: number } {
   return { shown: list.slice(0, MAX_ROWS), hidden: Math.max(0, list.length - MAX_ROWS) }
 }
@@ -83,7 +100,7 @@ export function registerPanel(on: On, ttlMs: number): void {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Button, Link, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     // Reading `now` subscribes the pane to the clock tick.
     const [t, isTurnRunning, turnStartedAt, , at, cwd, { context, cost }] = await Promise.all([
       readThread($),
@@ -276,21 +293,30 @@ export function registerPanel(on: On, ttlMs: number): void {
       return (
         <Box key={file.path} flexDirection="column">
           <Box flexDirection="row">
-            <Box flexGrow={1} flexShrink={1} marginLeft={2}>
-              <Text wrap="truncate-end">
-                <Text color={file.isNew ? COLORS.added : COLORS.amber} bold>
-                  {file.isNew ? '+' : '~'}
-                </Text>{' '}
-                <Link href={`file://${encodeURI(path)}`}>
-                  <Text color={COLORS.text}>{name}</Text>
-                </Link>
-                {file.isNew && ' '}
-                {file.isNew && (
+            <Box flexDirection="row" flexGrow={1} flexShrink={1} marginLeft={2}>
+              <Text color={file.isNew ? COLORS.added : COLORS.amber} bold>
+                {file.isNew ? '+ ' : '~ '}
+              </Text>
+              <Box flexShrink={1}>
+                <Button
+                  plain
+                  key={`open-${file.path}`}
+                  onPress={() => {
+                    void openInVsCode($, path)
+                  }}
+                >
+                  <Text color={COLORS.text} wrap="truncate-end" hover={{ color: COLORS.accent }}>
+                    {name}
+                  </Text>
+                </Button>
+              </Box>
+              {file.isNew && (
+                <Box marginLeft={1} flexShrink={0}>
                   <Text color={COLORS.added} bold>
                     NEW
                   </Text>
-                )}
-              </Text>
+                </Box>
+              )}
             </Box>
             {/* Counts and bar in fixed columns so every row lines up. */}
             <Box flexShrink={0}>
