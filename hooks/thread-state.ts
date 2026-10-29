@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { StateDollar } from 'claude-code'
 
-import type { PendingSwitch, Thread } from '../types'
+import type { Limits, PendingSwitch, Thread } from '../types'
 import { emptyThread } from './model'
 
 // The engine only lets the file that defines an atom read or write it, so every access lives here.
@@ -16,6 +16,7 @@ const pendingSwitch = atom(
 )
 const turnRunning = atom({ plugin: 'session-panel', key: 'turnRunning' } as const, false)
 const turnStartedAt = atom({ plugin: 'session-panel', key: 'turnStartedAt' } as const, 0)
+const limits = atom({ plugin: 'session-panel', key: 'limits' } as const, { windows: [], readAt: 0 } as Limits)
 const now = atom({ plugin: 'session-panel', key: 'now' } as const, 0)
 
 export function readThread($: StateDollar): Promise<Thread> {
@@ -48,6 +49,14 @@ export function readTurnStartedAt($: StateDollar): Promise<number> {
 
 export function setTurnStartedAt($: StateDollar, value: number): Promise<number> {
   return update($, turnStartedAt, () => value)
+}
+
+export function readLimits($: StateDollar): Promise<Limits> {
+  return read($, limits)
+}
+
+export function setLimits($: StateDollar, value: Limits): Promise<Limits> {
+  return update($, limits, () => value)
 }
 
 export function readNow($: StateDollar): Promise<number> {

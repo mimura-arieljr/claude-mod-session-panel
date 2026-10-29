@@ -11,7 +11,7 @@ import {
   relativePath,
 } from './model'
 import { saveSnapshot } from './thread'
-import { changeThread, setTurnRunning } from './thread-state'
+import { changeThread, setLimits, setTurnRunning } from './thread-state'
 
 type Patch = readonly { lines: readonly string[] }[] | undefined
 
@@ -82,6 +82,14 @@ export function registerCollectors(on: On): void {
     if (at !== null) {
       await saveSnapshot($, t)
       await setTurnRunning($, false)
+    }
+    return next(e)
+  })
+
+  // Each response's plan limits: kept with the time read, since an idle session's go stale.
+  on('session.measure', async ($, e, next) => {
+    if (e.rateLimits.length > 0 || e.changed.includes('rateLimits')) {
+      await setLimits($, { windows: e.rateLimits, readAt: await $.clock.now() })
     }
     return next(e)
   })

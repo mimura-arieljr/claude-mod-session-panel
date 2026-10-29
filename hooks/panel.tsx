@@ -4,12 +4,22 @@ import type { FileEntry, SectionId } from '../types'
 import {
   cacheFraction,
   cacheStatus,
+  formatAge,
   formatElapsed,
+  formatReset,
   formatTokens,
   formatUsd,
   toggleSection,
 } from './model'
-import { changeThread, readNow, readThread, readTurnRunning, readTurnStartedAt, setNow } from './thread-state'
+import {
+  changeThread,
+  readLimits,
+  readNow,
+  readThread,
+  readTurnRunning,
+  readTurnStartedAt,
+  setNow,
+} from './thread-state'
 import { COLORS, diffBar, diffCells, eighthBar, groupByFolder, splitPath } from './visuals'
 
 export const PANE = 'session-panel'
@@ -25,6 +35,9 @@ const LABEL_COLUMNS = 6
 // Inset outside and inside the rounded frame: one cell, just enough to show.
 const INSET_X = 1
 const INSET_Y = 1
+// After this long without a new response, the plan limits may lag other sessions.
+const LIMITS_STALE_MS = 5 * 60_000
+const LIMIT_LABEL: Record<string, string> = { five_hour: '5h', seven_day: 'week', spend_limit: 'spend' }
 const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 const SPIN_MS = 250
 // Single-width glyphs: emoji take two cells and break the row's alignment.
@@ -102,10 +115,11 @@ export function registerPanel(on: On, ttlMs: number): void {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     // Reading `now` subscribes the pane to the clock tick.
-    const [t, isTurnRunning, turnStartedAt, , at, cwd, { context, cost }] = await Promise.all([
+    const [t, isTurnRunning, turnStartedAt, limits, , at, cwd, { context, cost }] = await Promise.all([
       readThread($),
       readTurnRunning($),
       readTurnStartedAt($),
+      readLimits($),
       readNow($),
       $.clock.now(),
       $.session.cwd(),
@@ -233,6 +247,30 @@ export function registerPanel(on: On, ttlMs: number): void {
     const cacheCells = Math.round(cacheFraction(t.lastReplyAt, at, ttlMs, isTurnRunning) * barCells)
     const percent = context?.percent ?? 0
     const contextFill = eighthBar(percent / 100, barCells)
+    const limitsAge = at - limits.readAt
+    const isLimitsStale = limitsAge >= LIMITS_STALE_MS
+    const offsetMinutes = new Date(at).getTimezoneOffset()
+    const limitRow = (w: (typeof limits.windows)[number]) => {
+      const fill = eighthBar(w.percentUsed / 100, barCells)
+      const color = isLimitsStale
+        ? COLORS.muted
+        : w.percentUsed >= 95
+          ? COLORS.removed
+          : w.percentUsed >= 80
+            ? COLORS.amber
+            : COLORS.accent
+      return (
+        <Box key={`limit-${w.kind}`} flexDirection="row" justifyContent="space-between">
+          <Text>
+            {rowLabel(LIMIT_LABEL[w.kind] ?? w.kind.slice(0, LABEL_COLUMNS - 1))}
+            <Text color={color}>{fill}</Text>
+            <Text color={COLORS.track}>{'░'.repeat(Math.max(0, barCells - fill.length))}</Text>
+            <Text color={isLimitsStale ? COLORS.muted : COLORS.text}>{` ${Math.round(w.percentUsed)}%`}</Text>
+          </Text>
+          {w.resetsAt !== undefined && muted(`resets ${formatReset(w.resetsAt, at, offsetMinutes)}`)}
+        </Box>
+      )
+    }
     const usageBody = () => (
       <Box flexDirection="column">
         <Box flexDirection="row" justifyContent="space-between">
@@ -261,6 +299,12 @@ export function registerPanel(on: On, ttlMs: number): void {
           </Text>
           <Text color={COLORS.amber}>{cache}</Text>
         </Box>
+        {limits.windows.map(limitRow)}
+        {limits.windows.length > 0 && isLimitsStale && (
+          <Text color={COLORS.muted} italic>
+            {`limits as of ${formatAge(limitsAge)} ago`}
+          </Text>
+        )}
         {t.isTrackingSinceResume && muted('tracking since resume')}
       </Box>
     )

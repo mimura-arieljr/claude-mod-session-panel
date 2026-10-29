@@ -212,6 +212,25 @@ export function formatElapsed(ms: number): string {
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
 }
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+// A window's reset: a local time when it's today, else a short weekday.
+// `offsetMinutes` is Date's getTimezoneOffset(): minutes behind UTC.
+export function formatReset(resetsAt: string, now: number, offsetMinutes: number): string {
+  const local = (ms: number) => new Date(ms - offsetMinutes * 60_000)
+  const at = local(Date.parse(resetsAt))
+  const today = local(now)
+  if (at.toISOString().slice(0, 10) !== today.toISOString().slice(0, 10)) return WEEKDAYS[at.getUTCDay()]!
+  const hours = at.getUTCHours()
+  return `${hours % 12 || 12}:${String(at.getUTCMinutes()).padStart(2, '0')}${hours < 12 ? 'am' : 'pm'}`
+}
+
+// How long ago, in whole minutes under an hour, else hours.
+export function formatAge(ms: number): string {
+  const minutes = Math.floor(ms / 60_000)
+  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h`
+}
+
 export function formatUsd(n: number): string {
   return `$${n.toFixed(2)}`
 }

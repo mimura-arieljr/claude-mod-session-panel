@@ -10,6 +10,8 @@ import {
   cacheFraction,
   cacheStatus,
   emptyThread,
+  formatAge,
+  formatReset,
   formatTokens,
   formatUsd,
   parseTtl,
@@ -146,4 +148,19 @@ test('a parenthesized value is not read as a function', async () => {
     'added go',
     'added run',
   ])
+})
+
+test('a reset reads as a local time today, else a short weekday', async () => {
+  // Thu 2026-10-29 09:00 UTC; offset +420 is UTC-7, so 02:00 local.
+  const now = Date.UTC(2026, 9, 29, 9, 0)
+  expect(formatReset('2026-10-29T20:50:00Z', now, 420)).toBe('1:50pm')
+  expect(formatReset('2026-10-29T07:05:00Z', now, 0)).toBe('7:05am')
+  expect(formatReset('2026-10-31T12:00:00Z', now, 0)).toBe('Sat')
+  // Late tonight in UTC is already tomorrow at UTC+9.
+  expect(formatReset('2026-10-29T20:00:00Z', now, -540)).toBe('Fri')
+})
+
+test('ages read in minutes, then hours', async () => {
+  expect(formatAge(6 * 60_000)).toBe('6m')
+  expect(formatAge(90 * 60_000)).toBe('1h')
 })

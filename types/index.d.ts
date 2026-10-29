@@ -5,6 +5,9 @@ export type SkillUse = { name: string; count: number }
 export type McpUse = { server: string; tools: string[]; count: number }
 export type Assumption = { text: string; isFromAgent: boolean; at: number }
 export type SectionId = 'usage' | 'files' | 'tools' | 'assumptions'
+export type RateLimit = { kind: string; percentUsed: number; resetsAt?: string }
+// The plan limits the session's last response reported, and when
+export type Limits = { windows: RateLimit[]; readAt: number }
 export type PendingSwitch = 'clear' | 'resume' | null
 export type Thread = {
   sessionId: string
@@ -29,6 +32,7 @@ declare module 'claude-code' {
       turnRunning: boolean
       // Ms epoch the current main-loop turn started
       turnStartedAt: number
+      limits: Limits
       now: number
     }
   }

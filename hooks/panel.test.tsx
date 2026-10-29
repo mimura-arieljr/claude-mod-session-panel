@@ -31,6 +31,7 @@ function engine(on: On) {
     },
   }))
   on('turn.complete', () => ({ text: '' }))
+  on('session.measure', (_, e) => ({ changed: e.changed }))
   on('tool.call', (_, e) => {
     const filePath = String((e as { file_path?: unknown }).file_path ?? '')
     // A Write creates its file, as the engine reports one.
@@ -329,5 +330,44 @@ test('pressing a file name opens it in VS Code', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'open-src/my file.ts' })
   expect(ran).toEqual([['open', 'vscode://file/r/src/my%20file.ts']])
+  await ui.unmount()
+})
+
+const LIMITS = [
+  { kind: 'five_hour', percentUsed: 26.4, resetsAt: '2099-01-01T00:00:00Z' },
+  { kind: 'seven_day', percentUsed: 16 },
+]
+const MEASURE = { context: { window: 1_000_000 }, changed: ['rateLimits' as const] }
+
+test('usage shows each plan limit as a bar with its percent', async ($, on) => {
+  engine(on)
+  await $.session.measure({ ...MEASURE, rateLimits: LIMITS })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /^5h/ })).toBeDefined()
+  expect(await ui.find({ text: /^week/ })).toBeDefined()
+  expect(await ui.find({ text: /^ 26%$/ })).toBeDefined()
+  expect(await ui.find({ text: /^resets / })).toBeDefined()
+  expect(await ui.find({ text: /as of/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('no limit rows before the first reading', async ($, on) => {
+  engine(on)
+  await $.session.measure({ ...MEASURE, rateLimits: [] })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /^5h/ })).toBeUndefined()
+  expect(await ui.find({ text: /0%/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('an old reading dims and says its age', async ($, on) => {
+  const clock = engine(on)
+  await $.session.measure({ ...MEASURE, rateLimits: LIMITS })
+  await clock.advance(6 * 60_000)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /^limits as of 6m ago$/ })).toBeDefined()
+  const drawn = JSON.stringify(await ui.drawn())
+  const rows = drawn.slice(drawn.indexOf('limit-five_hour'), drawn.indexOf('limits as of'))
+  expect(rows).not.toContain('#4FD1C5')
   await ui.unmount()
 })
