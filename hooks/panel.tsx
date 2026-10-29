@@ -15,6 +15,9 @@ const RING_COLUMNS = 12
 const RING_ROWS = 6
 const FILE_BAR_CELLS = 7
 const SUMMARY_SQUARES = 5
+// Inset outside and inside the rounded frame: one cell, just enough to show.
+const INSET_X = 1
+const INSET_Y = 1
 const GLYPH: Record<Todo['status'], string> = { completed: '✓', in_progress: '▸', pending: '○' }
 const TODO_COLOR: Record<Todo['status'], string> = {
   completed: COLORS.added,
@@ -22,8 +25,8 @@ const TODO_COLOR: Record<Todo['status'], string> = {
   pending: COLORS.muted,
 }
 
-// The engine draws the frame (close row, edges); this paints the body under it.
-const PANE_OPEN = { id: PANE, title: TITLE, columns: DOCK_COLUMNS, backgroundColor: COLORS.page }
+// The engine draws the frame (close row, edges); the body is left unpainted so the inset shows through.
+const PANE_OPEN = { id: PANE, title: TITLE, columns: DOCK_COLUMNS, backgroundColor: 'transparent' }
 
 let tick: { cancel(): void } | undefined
 const rings = new Map<number, ReturnType<typeof ringRows>>()
@@ -89,7 +92,9 @@ export function registerPanel(on: On, ttlMs: number): void {
       $.clock.now(),
       $.session.usage(),
     ])
-    const barCells = Math.max(8, Math.min(28, e.props.bodyColumns - 18))
+    // Cells for the cards: the body less both insets and the border.
+    const innerColumns = Math.max(0, e.props.bodyColumns - INSET_X * 4 - 2)
+    const barCells = Math.max(8, Math.min(28, innerColumns - 18))
 
     const label = (text: string) => (
       <Text color={COLORS.muted} bold>
@@ -123,34 +128,31 @@ export function registerPanel(on: On, ttlMs: number): void {
       const isCollapsed = t.collapsed.includes(id)
       return (
         <Box key={id} flexDirection="column" backgroundColor={COLORS.card} paddingX={1} paddingY={1}>
-          <Box flexDirection="row" justifyContent="space-between">
-            <Button
-              plain
-              key={`toggle-${id}`}
-              onPress={() => {
-                void changeThread($, current => toggleSection(current, id))
-              }}
-            >
-              <Text color={COLORS.muted}>{isCollapsed ? '▸ ' : '▾ '}</Text>
-              <Text color={COLORS.label} bold>
-                {title}
-              </Text>
-              {badge !== null && ' '}
-              {badge}
-            </Button>
+          {/* Keyed so hover turns the title cyan; the pointer's inversion then highlights in cyan. */}
+          <Box key={`head-${id}`} flexDirection="row" justifyContent="space-between">
+            <Box flexDirection="row">
+              <Button
+                plain
+                key={`toggle-${id}`}
+                onPress={() => {
+                  void changeThread($, current => toggleSection(current, id))
+                }}
+              >
+                <Text color={COLORS.muted} hover={{ color: COLORS.accent }}>
+                  {isCollapsed ? '▸ ' : '▾ '}
+                </Text>
+                <Text color={COLORS.label} bold hover={{ color: COLORS.accent }}>
+                  {title}
+                </Text>
+              </Button>
+              {badge !== null && <Text> {badge}</Text>}
+            </Box>
             {right}
           </Box>
           {!isCollapsed && body()}
         </Box>
       )
     }
-
-    // A thin cyan line between sections.
-    const divider = (n: number) => (
-      <Box key={`divider-${n}`}>
-        <Text color={COLORS.accent}>{'─'.repeat(e.props.bodyColumns)}</Text>
-      </Box>
-    )
 
     // Header: the panel's name.
     const header = (
@@ -418,17 +420,24 @@ export function registerPanel(on: On, ttlMs: number): void {
     }
 
     return (
-      <Box flexDirection="column" backgroundColor={COLORS.page} minHeight={e.props.scroll.bodyRows}>
-        <Box marginBottom={1}>{header}</Box>
-        {section('progress', 'PROGRESS', null, progressRight, progressBody)}
-        {divider(0)}
-        {section('usage', 'USAGE', null, muted(usd), usageBody)}
-        {divider(1)}
-        {section('files', 'FILES CHANGED', filesBadge, filesRight, filesBody)}
-        {divider(2)}
-        {section('tools', 'SKILLS & MCPS', null, muted(String(toolUses)), toolsBody)}
-        {divider(3)}
-        {section('assumptions', 'ASSUMPTIONS', assumptionsBadge, null, assumptionsBody)}
+      <Box flexDirection="column" minHeight={e.props.scroll.bodyRows} paddingX={INSET_X} paddingY={INSET_Y}>
+        <Box
+          flexDirection="column"
+          flexGrow={1}
+          gap={1}
+          paddingX={INSET_X}
+          paddingY={INSET_Y}
+          backgroundColor={COLORS.page}
+          borderStyle="round"
+          borderColor={COLORS.frame}
+        >
+          {header}
+          {section('progress', 'PROGRESS', null, progressRight, progressBody)}
+          {section('usage', 'USAGE', null, muted(usd), usageBody)}
+          {section('files', 'FILES CHANGED', filesBadge, filesRight, filesBody)}
+          {section('tools', 'SKILLS & MCPS', null, muted(String(toolUses)), toolsBody)}
+          {section('assumptions', 'ASSUMPTIONS', assumptionsBadge, null, assumptionsBody)}
+        </Box>
       </Box>
     )
   })

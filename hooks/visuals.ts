@@ -1,13 +1,14 @@
 // Drawing helpers for the panel's look: the context ring, diff bars, short paths.
 
 export const COLORS = {
-  // Matches the frame once the theme sets composerSidebarBackground to the same color.
+  // Inside the rounded frame, behind the cards.
   page: '#101317',
   card: '#1A1D24',
   raised: '#20242D',
   track: '#262A35',
   badge: '#262A35',
   dashed: '#343A47',
+  frame: '#3A4150',
   accent: '#4FD1C5',
   // accent at 12% over the card
   accentTint: '#203337',

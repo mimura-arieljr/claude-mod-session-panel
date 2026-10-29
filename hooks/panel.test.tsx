@@ -193,16 +193,18 @@ test('the command says why the pane is not beside the chat', async ($, on) => {
   expect(wide.text).toBe('Session panel shown beside the chat.')
 })
 
-test('the panel fills its pane in near-black', async ($, on) => {
+test('the panel paints nothing outside its frame', async ($, on) => {
   engine(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const root = (await ui.drawn()) as { props?: { backgroundColor?: string; minHeight?: number } }
-  expect(root.props?.backgroundColor).toBe('#101317')
+  type Node = { props?: Record<string, unknown>; children?: Node[] }
+  const root = (await ui.drawn()) as Node
+  expect(root.props?.backgroundColor).toBeUndefined()
   expect(root.props?.minHeight).toBe(80)
+  expect(root.children?.[0]?.props?.backgroundColor).toBe('#101317')
   await ui.unmount()
 })
 
-test('the pane opens on a near-black body', async ($, on) => {
+test('the pane opens on a transparent body', async ($, on) => {
   engine(on)
   const opened: unknown[] = []
   on('ui.panes', () => ({ value: [] }))
@@ -211,16 +213,29 @@ test('the pane opens on a near-black body', async ($, on) => {
     return { value: { isPlaced: true } }
   })
   await $.command.run({ command: 'session-panel', args: '' } as never)
-  expect(opened).toEqual([expect.objectContaining({ backgroundColor: '#101317' })])
+  expect(opened).toEqual([expect.objectContaining({ backgroundColor: 'transparent' })])
 })
 
-test('sections are borderless cards split by cyan lines', async ($, on) => {
+test('sections are borderless cards spaced apart, no divider lines', async ($, on) => {
   engine(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const drawn = JSON.stringify(await ui.drawn())
   expect(drawn).not.toContain('"borderStyle":"round","borderColor":"#2A2F3A"')
-  expect(drawn.match(/"key":"divider-\d"/g) ?? []).toHaveLength(4)
-  expect(drawn).toContain('"color":"#4FD1C5"},"children":["────')
+  expect(drawn).not.toContain('"key":"divider-')
+  expect(drawn).not.toContain('────')
+  await ui.unmount()
+})
+
+test('the panel sits in a rounded frame inset on every side', async ($, on) => {
+  engine(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  type Node = { props?: Record<string, unknown>; children?: Node[] }
+  const root = (await ui.drawn()) as Node
+  expect(root.props).toEqual(expect.objectContaining({ paddingX: 1, paddingY: 1 }))
+  const frame = root.children?.[0]
+  expect(frame?.props).toEqual(
+    expect.objectContaining({ borderStyle: 'round', borderColor: '#3A4150', gap: 1, paddingX: 1, paddingY: 1 }),
+  )
   await ui.unmount()
 })
 
@@ -229,5 +244,23 @@ test('the header has no status pill', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ text: /Session/ })).toBeDefined()
   expect(await ui.find({ text: /● (IDLE|WORKING)/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('section titles turn cyan under the pointer, the badge outside the press', async ($, on) => {
+  engine(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const drawn = JSON.stringify(await ui.drawn())
+  expect(drawn).toContain('"key":"head-files"')
+  expect(drawn.match(/"hover":\{"color":"#4FD1C5"\}/g)?.length).toBeGreaterThanOrEqual(10)
+  type Node = { type?: string; props?: Record<string, unknown>; children?: Node[] }
+  const buttons: Node[] = []
+  const walk = (n: Node) => {
+    if (n.type === 'Button') buttons.push(n)
+    n.children?.forEach(walk)
+  }
+  walk((await ui.drawn()) as Node)
+  expect(buttons.length).toBe(5)
+  for (const b of buttons) expect(JSON.stringify(b)).not.toContain('#262A35')
   await ui.unmount()
 })
