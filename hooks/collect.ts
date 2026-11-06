@@ -26,13 +26,20 @@ function contentLines(content: string): string[] {
   return lines.map(line => `+${line}`)
 }
 
+// Skill calls in flight: their skill.prompt is left for tool.call to count.
+let skillCallsRunning = 0
+
 export function registerCollectors(on: On): void {
   on('tool.call', async ($, e, next) => {
     // A subagent's latest call, shown under it in the Agents section.
     if (e.agentId !== undefined) {
       await setAgentActivity($, e.agentId, describeToolCall(e.tool, e as Record<string, unknown>, await $.session.cwd()))
     }
-    const ran = await next(e)
+    const isSkill = e.tool === 'Skill'
+    if (isSkill) skillCallsRunning++
+    const ran = await next(e).finally(() => {
+      if (isSkill) skillCallsRunning--
+    })
     if (ran.deny !== undefined || ran.isError === true) return ran
 
     if (e.tool === 'Edit' || e.tool === 'Write') {
@@ -66,14 +73,20 @@ export function registerCollectors(on: On): void {
       await changeThread($, t =>
         applyTaskUpdate(t, e.taskId, { status: e.status, subject: e.subject }),
       )
+    } else if (e.tool === 'Skill') {
+      // Counted here too: in org sessions skill.prompt never reaches the mod.
+      const result = ran.result as { commandName?: string } | undefined
+      const name = result?.commandName ?? e.skill
+      await changeThread($, t => addSkill(t, name))
     } else if (e.tool.startsWith('mcp__')) {
       await changeThread($, t => addMcp(t, e.tool))
     }
     return ran
   }).catch(($, e, next) => next(e)) // Observer only: a failure here never blocks the call.
 
+  // Typed /name and subagent preloads; a Skill call's expansion is counted at tool.call.
   on('skill.prompt', async ($, e, next) => {
-    await changeThread($, t => addSkill(t, e.skill))
+    if (skillCallsRunning === 0) await changeThread($, t => addSkill(t, e.skill))
     return next(e)
   })
 

@@ -119,6 +119,33 @@ test('skill and mcp uses are listed', async ($, on) => {
   expect(t.mcps).toEqual([{ server: 'claude_ai_Notion', tools: ['notion-search'], count: 1 }])
 })
 
+// Team and Enterprise sessions: cc-plugin-sec-default passes skill.prompt on past the mod.
+test('a Skill call is listed when skill.prompt never reaches the mod', async ($, on) => {
+  const thread = engine(on)
+  on('tool.call', () => ({ result: { success: true, commandName: 'run' } }))
+  await $.tool.call({ tool: 'Skill', skill: 'run' })
+  expect(thread().skills).toEqual([{ name: 'run', count: 1 }])
+})
+
+test('a Skill call whose skill.prompt reaches the mod counts once', async ($, on) => {
+  const thread = engine(on)
+  on('skill.prompt', (_, e) => ({ text: e.text }))
+  // The engine expands the skill while the Skill call runs.
+  on('tool.call', async () => {
+    await $.skill.prompt({ skill: 'run', text: 'x', frontmatter: {}, source: 'built-in' })
+    return { result: { success: true, commandName: 'run' } }
+  })
+  await $.tool.call({ tool: 'Skill', skill: 'run' })
+  expect(thread().skills).toEqual([{ name: 'run', count: 1 }])
+})
+
+test('an errored Skill call adds nothing', async ($, on) => {
+  const thread = engine(on)
+  on('tool.call', () => ({ result: {}, isError: true }))
+  await $.tool.call({ tool: 'Skill', skill: 'nope' })
+  expect(thread().skills).toEqual([])
+})
+
 test('a Write that creates a file counts its content', async ($, on) => {
   const thread = engine(on)
   // The engine's real create result: an empty patch, the content beside it.
