@@ -63,7 +63,7 @@ All in `hooks/`; each has a `*.test.ts(x)` beside it.
 - `panel.tsx`: the `/session-panel` command, the docked pane, the clock tick (spinner frames, agent polling, the minute countdown) and the pane's drawing.
 - `agents.ts`: reads `$.agent.list()` into the Agents rows on `agent.spawn`, then every 2s while any agent is unfinished.
 - `collect.ts`: watches tool calls (Edit/Write/NotebookEdit, TodoWrite, TaskCreate/TaskUpdate, MCP, each subagent's latest call), skills, `turn.complete` usage and `session.measure` rate limits.
-- `assumptions.ts`: the `note_assumption` tool, saving each call as an assumption, and the prompt section telling Claude to use it.
+- `assumptions.ts`: the `note_assumption` tool, whose description tells Claude when to use it, and saves each call as an assumption. No `prompt.compose` hook: org sessions skip it.
 - `thread.ts`: keeps the thread matched to the session id across `/clear`, `/resume` and forks, saves per-session snapshots (up to 50), and stamps when a turn starts.
 - `thread-state.ts`: every `$.state` atom (thread, pendingSwitch, turnRunning, turnStartedAt, limits, agents, agentActivity, now) and its read/write helpers. The engine only lets the defining file touch an atom, so all access lives here.
 - `model.ts`: pure functions: thread updates (todos, tasks, file diffs, skills, MCPs, usage, assumptions, collapsed sections), formatters, cache-warmth math, agent-list merging and the agent tree.

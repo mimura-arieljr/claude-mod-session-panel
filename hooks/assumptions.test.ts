@@ -1,7 +1,7 @@
 import type { Engine } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 
-import { ASSUMPTION_SECTION_ID } from './assumptions'
+import { TOOL_DESCRIPTION } from './assumptions'
 import { watchThread } from './test-support'
 
 const TOOL = 'mcp__session-panel__note_assumption'
@@ -32,7 +32,13 @@ test("a subagent's assumption is marked", async ($, on) => {
   expect(thread().assumptions[0]?.isFromAgent).toBe(true)
 })
 
-test('the instruction is added last', async ($, on) => {
+// Org sessions: cc-plugin-sec-default skips user prompt.compose hooks, so the tool carries the instruction.
+test('the tool description says when to use it', () => {
+  expect(TOOL_DESCRIPTION).toContain('assume something the user did not state')
+  expect(TOOL_DESCRIPTION).toContain('keep working')
+})
+
+test('the system prompt is left alone', async ($, on) => {
   on('prompt.compose', () => ({ sections: [{ id: 'x', text: 'x', scope: 'shared' }] }))
   const composed = await $.prompt.compose({
     model: 'm',
@@ -42,8 +48,5 @@ test('the instruction is added last', async ($, on) => {
     outputStyle: null,
     traits: [],
   })
-  const last = composed.sections[composed.sections.length - 1]
-  expect(last?.id).toBe(ASSUMPTION_SECTION_ID)
-  expect(last?.scope).toBe('session')
-  expect(last?.text).toContain('note_assumption')
+  expect(composed.sections.map(s => s.id)).toEqual(['x'])
 })
