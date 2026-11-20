@@ -77,7 +77,7 @@ let tick: { cancel(): void } | undefined
 export async function setupPanel($: EngineInterface): Promise<void> {
   await $.command.register({
     name: 'session-panel',
-    description: 'Show or hide the session panel; "mini" switches to the strip above the prompt',
+    description: 'Show or hide the session panel; "toggle" switches between full and mini',
   })
   const mode = await loadViewMode($)
   await setView($, { mode, isShown: true })
@@ -138,7 +138,7 @@ export function registerPanel(on: On, ttlMs: number): void {
     const ask = parseViewArg(e.args)
     if (ask === 'unknown') return { text: USAGE_HINT }
     const view = await readView($)
-    if (ask === 'mini') {
+    if (ask === 'switch') {
       // Only one view is ever up: switching closes or reopens the full pane.
       if (view.mode === 'full') {
         await $.ui.close({ id: PANE })

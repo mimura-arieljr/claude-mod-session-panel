@@ -48,27 +48,28 @@ const run = (
   args: string,
 ) => $.command.run({ command: 'session-panel', args } as never)
 
-test('args parse to mini, toggle or unknown', () => {
-  expect(parseViewArg('')).toBe('toggle')
-  expect(parseViewArg('  MINI ')).toBe('mini')
+test('args parse to switch, show-hide or unknown', () => {
+  expect(parseViewArg('')).toBe('showHide')
+  expect(parseViewArg('  TOGGLE ')).toBe('switch')
+  expect(parseViewArg('mini')).toBe('unknown')
   expect(parseViewArg('foo')).toBe('unknown')
 })
 
-test('mini closes the full pane and is remembered', async ($, on) => {
+test('toggle from full closes the pane, shows mini and is remembered', async ($, on) => {
   const { calls, store } = engine(on)
   await $.session.start(START)
   calls.length = 0
-  const ran = await run($, 'mini')
+  const ran = await run($, 'toggle')
   expect(calls).toEqual(['close'])
   expect(ran.text).toBe(MINI_SHOWN)
   expect(store['view-mode']).toBe('mini')
 })
 
-test('mini again opens the full pane and stores full', async ($, on) => {
+test('toggle again opens the full pane and stores full', async ($, on) => {
   const { calls, store } = engine(on)
   await $.session.start(START)
-  await run($, 'mini')
-  const ran = await run($, 'mini')
+  await run($, 'toggle')
+  const ran = await run($, 'toggle')
   expect(calls.at(-1)).toBe('open')
   expect(ran.text).toContain('Session panel shown')
   expect(store['view-mode']).toBe('full')
@@ -77,7 +78,7 @@ test('mini again opens the full pane and stores full', async ($, on) => {
 test('bare command in mini hides then shows the strip without opening the pane', async ($, on) => {
   const { calls } = engine(on)
   await $.session.start(START)
-  await run($, 'mini')
+  await run($, 'toggle')
   calls.length = 0
   expect((await run($, '')).text).toBe(MINI_HIDDEN)
   expect((await run($, '')).text).toBe(MINI_SHOWN)

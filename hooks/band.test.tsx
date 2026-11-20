@@ -66,7 +66,7 @@ test('mini view puts usage on one row and tools on the next when wide', async ($
   on('tool.call', () => ({ result: { success: true, commandName: 'run' } }))
   await $.tool.call({ tool: 'Skill', skill: 'run' })
   await $.session.measure({ ...MEASURE, rateLimits: LIMITS })
-  await $.command.run(command('mini'))
+  await $.command.run(command('toggle'))
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...BAND, surface })
     expect(await ui.find({ text: /^Ctx/ })).toBeDefined()
@@ -89,7 +89,7 @@ test('mini view puts usage on one row and tools on the next when wide', async ($
 test('usage segments on one row are split by a dim bar', async ($, on) => {
   engine(on)
   await $.session.measure({ ...MEASURE, rateLimits: LIMITS })
-  await $.command.run(command('mini'))
+  await $.command.run(command('toggle'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   const row = await ui.find({ key: 'mini-row-0' })
   expect(row?.text.split('│').length).toBe(3)
@@ -99,7 +99,7 @@ test('usage segments on one row are split by a dim bar', async ($, on) => {
 test('a narrow band wraps segments onto more rows, no bar at a row start', async ($, on) => {
   engine(on)
   await $.session.measure({ ...MEASURE, rateLimits: LIMITS })
-  await $.command.run(command('mini'))
+  await $.command.run(command('toggle'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: 40 } })
   const second = await ui.find({ key: 'mini-row-1' })
   expect(second).toBeDefined()
@@ -111,7 +111,7 @@ test('a narrow band wraps segments onto more rows, no bar at a row start', async
 
 test('with no limits or tools the strip shows context and none yet', async ($, on) => {
   engine(on)
-  await $.command.run(command('mini'))
+  await $.command.run(command('toggle'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await ui.find({ text: /^Ctx/ })).toBeDefined()
   expect((await ui.find({ key: 'mini-tools' }))?.text).toContain('none yet')
@@ -122,7 +122,7 @@ test('with no limits or tools the strip shows context and none yet', async ($, o
 
 test('the band yields to a survey', async ($, on) => {
   engine(on)
-  await $.command.run(command('mini'))
+  await $.command.run(command('toggle'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, hasSurvey: true } })
   expect(await ui.find({ text: /^Ctx/ })).toBeUndefined()
   await ui.unmount()
@@ -130,7 +130,7 @@ test('the band yields to a survey', async ($, on) => {
 
 test('hidden mini view draws nothing', async ($, on) => {
   engine(on)
-  await $.command.run(command('mini'))
+  await $.command.run(command('toggle'))
   await $.command.run(command(''))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await ui.find({ text: /^Ctx/ })).toBeUndefined()
@@ -139,7 +139,7 @@ test('hidden mini view draws nothing', async ($, on) => {
 
 test('the strip has no frame', async ($, on) => {
   engine(on)
-  await $.command.run(command('mini'))
+  await $.command.run(command('toggle'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(JSON.stringify(await ui.drawn())).not.toContain('borderStyle')
   await ui.unmount()
@@ -163,7 +163,7 @@ test('full view does not read usage to draw the band', async ($, on) => {
 test('dividers and bar tracks use colors that show on the terminal background', async ($, on) => {
   engine(on)
   await $.session.measure({ ...MEASURE, rateLimits: LIMITS })
-  await $.command.run(command('mini'))
+  await $.command.run(command('toggle'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect((await ui.find({ text: /│/, type: 'Text' }))?.props.color).toBe(COLORS.muted)
   expect((await ui.find({ text: /^░+$/, type: 'Text' }))?.props.color).toBe(COLORS.faint)
@@ -173,7 +173,7 @@ test('dividers and bar tracks use colors that show on the terminal background', 
 // The `/` suggestions start their names 4 columns in; the strip lines up with them.
 test('the strip is inset and spaced from the slash suggestions', async ($, on) => {
   engine(on)
-  await $.command.run(command('mini'))
+  await $.command.run(command('toggle'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   type Node = { props?: Record<string, unknown> }
   expect(((await ui.drawn()) as Node).props?.paddingLeft).toBe(4)

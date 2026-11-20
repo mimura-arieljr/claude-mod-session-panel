@@ -33,7 +33,7 @@ claude plugin install session-panel --marketplace mimura-arieljr/claude-mod-sess
 
 - The pane opens at session start on terminals 144+ columns wide.
 - `/session-panel` shows or hides the current view at any width, and says where it went.
-- `/session-panel mini` switches between the full pane and the mini strip. Only one is up at a time, and the last one you picked is used next session.
+- `/session-panel toggle` switches between the full pane and the mini strip. Only one is up at a time, and the last one you picked is used next session.
 - It docks beside the chat in fullscreen layout (`"tui": "fullscreen"`) on terminals 110+ columns wide; otherwise it sits above the prompt.
 - Click a section title (or Tab to it and press Enter) to collapse or expand it.
 - Click a file name to open it in VS Code (through its `vscode://` handler).
