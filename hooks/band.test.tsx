@@ -166,7 +166,7 @@ test('dividers and bar tracks use colors that show on the terminal background', 
   await $.command.run(command('mini'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect((await ui.find({ text: /│/, type: 'Text' }))?.props.color).toBe(COLORS.muted)
-  expect((await ui.find({ text: /^░+$/, type: 'Text' }))?.props.color).toBe(COLORS.bandTrack)
+  expect((await ui.find({ text: /^░+$/, type: 'Text' }))?.props.color).toBe(COLORS.faint)
   await ui.unmount()
 })
 

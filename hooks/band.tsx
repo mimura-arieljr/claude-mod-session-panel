@@ -39,7 +39,7 @@ export function registerBand(on: On): void {
       const fill = eighthBar(fraction, BAR_CELLS)
       return [
         <Text key="fill" color={color}>{fill}</Text>,
-        <Text key="track" color={COLORS.bandTrack}>{'░'.repeat(Math.max(0, BAR_CELLS - fill.length))}</Text>,
+        <Text key="track" color={COLORS.faint}>{'░'.repeat(Math.max(0, BAR_CELLS - fill.length))}</Text>,
       ]
     }
 

@@ -3,17 +3,8 @@
 import type { FileEntry } from '../types'
 
 export const COLORS = {
-  // Inside the rounded frame
-  page: '#1A1D24',
-  raised: '#20242D',
-  track: '#2E3340',
-  rule: '#2A2F3A',
-  dashed: '#343A47',
-  frame: '#3A4150',
   accent: '#4FD1C5',
   amber: '#E6B866',
-  // Behind assumption rows only
-  assumptionFill: '#262318',
   assumptionText: '#E2D8C2',
   added: '#6EE7A0',
   removed: '#FF8A7A',
@@ -21,8 +12,8 @@ export const COLORS = {
   textMid: '#C3C8D1',
   label: '#AEB4BF',
   muted: '#8B93A1',
-  // Bar track in the band, which sits on the terminal's own background
-  bandTrack: '#5A6273',
+  // Rules, tracks and empty boxes: shows on the terminal's own background
+  faint: '#5A6273',
 } as const
 
 function clamp01(n: number): number {

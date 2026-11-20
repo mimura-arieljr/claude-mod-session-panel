@@ -2,7 +2,7 @@
 
 A Claude Code mod: a pane beside the chat for checking on long tasks at a glance.
 
-A rounded frame with a status line on top, then collapsible sections split by dim rules, each with an icon, an uppercase header and a summary on the right:
+No background of its own, so it takes on the terminal's: a status line on top, then collapsible sections split by faint rules, each with an icon, an uppercase header and a summary on the right:
 
 - **Status line**: `● IDLE`, or `● WORKING` with a spinner, the task in progress and how long the turn has run.
 - **Agents** (once a subagent starts): each subagent with a spinner and timer while running, then done, failed or killed; its latest tool call; children nested under their parent. The last 3 finished stay listed.

@@ -42,7 +42,7 @@ const FILE_BAR_CELLS = 10
 const SUMMARY_CELLS = 10
 // Usage rows: labels padded to one column so the bars start together.
 const LABEL_COLUMNS = 6
-// Inset outside and inside the rounded frame: one cell, just enough to show.
+// Inset inside the engine's pane frame: one cell, just enough to show.
 const INSET_X = 1
 const INSET_Y = 1
 const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
@@ -68,7 +68,7 @@ const ICON: Record<SectionId, string> = {
   assumptions: '≈',
 }
 
-// The engine draws the frame (close row, edges); the body is left unpainted so the inset shows through.
+// The engine draws the frame (close row, edges); nothing inside is painted, so the terminal shows through.
 const PANE_OPEN = { id: PANE, title: TITLE, columns: DOCK_COLUMNS, backgroundColor: 'transparent' }
 
 let tick: { cancel(): void } | undefined
@@ -185,7 +185,7 @@ export function registerPanel(on: On, ttlMs: number): void {
       $.session.usage(),
     ])
     // Cells inside the frame: the body less both insets and the border.
-    const contentColumns = Math.max(0, e.props.bodyColumns - INSET_X * 4 - 2)
+    const contentColumns = Math.max(0, e.props.bodyColumns - INSET_X * 2)
     const barCells = Math.max(8, Math.min(24, contentColumns - 24))
     const spinner = SPIN[Math.floor(at / SPIN_MS) % SPIN.length]!
 
@@ -193,7 +193,7 @@ export function registerPanel(on: On, ttlMs: number): void {
     const rowLabel = (text: string) => <Text color={COLORS.muted}>{text.padEnd(LABEL_COLUMNS)}</Text>
     const moreRow = (hidden: number) => hidden > 0 && muted(`+${hidden} more`)
     const empty = (hint: string) => (
-      <Box flexDirection="column" borderStyle="round" borderColor={COLORS.dashed} paddingX={1}>
+      <Box flexDirection="column" borderStyle="round" borderColor={COLORS.faint} paddingX={1}>
         <Text color={COLORS.textMid} bold>
           None yet
         </Text>
@@ -246,14 +246,14 @@ export function registerPanel(on: On, ttlMs: number): void {
 
     // A dim line between sections.
     const rule = (n: number) => (
-      <Text key={`rule-${n}`} color={COLORS.rule}>
+      <Text key={`rule-${n}`} color={COLORS.faint}>
         {'─'.repeat(contentColumns)}
       </Text>
     )
 
     // Header: the panel's name.
     const header = (
-      <Box flexDirection="row" paddingX={1}>
+      <Box flexDirection="row">
         <Text>
           <Text color={COLORS.accent} bold>
             {'❯_ '}
@@ -268,7 +268,7 @@ export function registerPanel(on: On, ttlMs: number): void {
     // Status line: a spinner and the turn's time while working.
     const current = t.todos.find(todo => todo.status === 'in_progress')
     const status = (
-      <Box flexDirection="row" justifyContent="space-between" backgroundColor={COLORS.raised} paddingX={1}>
+      <Box flexDirection="row" justifyContent="space-between">
         {isTurnRunning ? (
           <Box flexShrink={1}>
             <Text wrap="truncate-end">
@@ -369,7 +369,7 @@ export function registerPanel(on: On, ttlMs: number): void {
           <Text>
             {rowLabel(LIMIT_LABEL[w.kind] ?? w.kind.slice(0, LABEL_COLUMNS - 1))}
             <Text color={color}>{fill}</Text>
-            <Text color={COLORS.track}>{'░'.repeat(Math.max(0, barCells - fill.length))}</Text>
+            <Text color={COLORS.faint}>{'░'.repeat(Math.max(0, barCells - fill.length))}</Text>
             <Text color={isLimitsStale ? COLORS.muted : COLORS.text}>{` ${Math.round(w.percentUsed)}%`}</Text>
           </Text>
           {w.resetsAt !== undefined && muted(`resets ${formatReset(w.resetsAt, at, offsetMinutes)}`)}
@@ -382,7 +382,7 @@ export function registerPanel(on: On, ttlMs: number): void {
           <Text>
             {rowLabel('ctx')}
             <Text color={COLORS.accent}>{contextFill}</Text>
-            <Text color={COLORS.track}>{'░'.repeat(Math.max(0, barCells - contextFill.length))}</Text>
+            <Text color={COLORS.faint}>{'░'.repeat(Math.max(0, barCells - contextFill.length))}</Text>
             <Text color={COLORS.text}>{` ${Math.round(percent)}%`}</Text>
           </Text>
           {muted(
@@ -400,7 +400,7 @@ export function registerPanel(on: On, ttlMs: number): void {
           <Text>
             {rowLabel('cache')}
             <Text color={COLORS.amber}>{'━'.repeat(cacheCells)}</Text>
-            <Text color={COLORS.track}>{'┄'.repeat(barCells - cacheCells)}</Text>
+            <Text color={COLORS.faint}>{'┄'.repeat(barCells - cacheCells)}</Text>
           </Text>
           <Text color={COLORS.amber}>{cache}</Text>
         </Box>
@@ -539,7 +539,7 @@ export function registerPanel(on: On, ttlMs: number): void {
       )
     }
 
-    // Assumptions: the only rows with a fill.
+    // Assumptions: amber numbers set them apart.
     const assumptionsBadge = (
       <Text color={COLORS.amber} bold>
         {String(t.assumptions.length)}
@@ -554,8 +554,6 @@ export function registerPanel(on: On, ttlMs: number): void {
             <Box
               key={`assumption-${a.at}-${i}`}
               flexDirection="row"
-              backgroundColor={COLORS.assumptionFill}
-              paddingX={1}
             >
               <Text color={COLORS.amber} bold>
                 {String(t.assumptions.length - i).padStart(2, '0')}
@@ -578,29 +576,18 @@ export function registerPanel(on: On, ttlMs: number): void {
     }
 
     return (
-      <Box flexDirection="column" minHeight={e.props.scroll.bodyRows} paddingX={INSET_X} paddingY={INSET_Y}>
-        <Box
-          flexDirection="column"
-          flexGrow={1}
-          gap={1}
-          paddingX={INSET_X}
-          paddingY={INSET_Y}
-          backgroundColor={COLORS.page}
-          borderStyle="round"
-          borderColor={COLORS.frame}
-        >
-          {header}
-          {status}
-          {[
-            agents.rows.length > 0 && section('agents', 'AGENTS', agentsBadge, agentsRight, agentsBody),
-            section('usage', 'USAGE', null, muted(usd), usageBody),
-            section('files', 'FILES CHANGED', filesBadge, filesRight, filesBody),
-            section('tools', 'SKILLS & MCPS', null, muted(String(toolUses)), toolsBody),
-            section('assumptions', 'ASSUMPTIONS', assumptionsBadge, null, assumptionsBody),
-          ]
-            .filter(shown => shown !== false)
-            .flatMap((shown, i) => (i === 0 ? [shown] : [rule(i), shown]))}
-        </Box>
+      <Box flexDirection="column" minHeight={e.props.scroll.bodyRows} gap={1} paddingX={INSET_X} paddingY={INSET_Y}>
+        {header}
+        {status}
+        {[
+          agents.rows.length > 0 && section('agents', 'AGENTS', agentsBadge, agentsRight, agentsBody),
+          section('usage', 'USAGE', null, muted(usd), usageBody),
+          section('files', 'FILES CHANGED', filesBadge, filesRight, filesBody),
+          section('tools', 'SKILLS & MCPS', null, muted(String(toolUses)), toolsBody),
+          section('assumptions', 'ASSUMPTIONS', assumptionsBadge, null, assumptionsBody),
+        ]
+          .filter(shown => shown !== false)
+          .flatMap((shown, i) => (i === 0 ? [shown] : [rule(i), shown]))}
       </Box>
     )
   })

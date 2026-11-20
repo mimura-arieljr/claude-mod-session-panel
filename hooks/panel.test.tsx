@@ -1,6 +1,8 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
+import { COLORS } from './visuals'
+
 const PANE = {
   plugin: 'session-panel',
   component: 'Pane',
@@ -156,13 +158,14 @@ test('a running turn shows a spinner and the time since it started', async ($, o
   await ui.unmount()
 })
 
-test('only assumption rows carry the amber fill', async ($, on) => {
-  engine(on)
+test('nothing in the panel paints a background', async ($, on) => {
+  const clock = engine(on)
+  on('turn.start', (_, e) => ({ text: e.text, turnId: e.turnId }))
+  await $.turn.start({ text: 'hi', turnId: 't' })
+  await clock.advance(1000)
   await $.tool.call({ tool: 'mcp__session-panel__note_assumption', assumption: 'x' } as never)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const drawn = JSON.stringify(await ui.drawn())
-  expect(drawn.match(/"backgroundColor":"#262318"/g)).toHaveLength(1)
-  expect(drawn).not.toContain('"backgroundColor":"#3B362F"')
+  expect(JSON.stringify(await ui.drawn())).not.toContain('backgroundColor')
   await ui.unmount()
 })
 
@@ -237,14 +240,11 @@ test('the command says why the pane is not beside the chat', async ($, on) => {
   expect(wide.text).toBe('Session panel shown beside the chat.')
 })
 
-test('the panel paints nothing outside its frame', async ($, on) => {
+test('the panel fills the pane height', async ($, on) => {
   engine(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  type Node = { props?: Record<string, unknown>; children?: Node[] }
-  const root = (await ui.drawn()) as Node
-  expect(root.props?.backgroundColor).toBeUndefined()
-  expect(root.props?.minHeight).toBe(80)
-  expect(root.children?.[0]?.props?.backgroundColor).toBe('#1A1D24')
+  type Node = { props?: Record<string, unknown> }
+  expect(((await ui.drawn()) as Node).props?.minHeight).toBe(80)
   await ui.unmount()
 })
 
@@ -260,26 +260,29 @@ test('the pane opens on a transparent body', async ($, on) => {
   expect(opened).toEqual([expect.objectContaining({ backgroundColor: 'transparent' })])
 })
 
-test('sections sit on the frame, split by dim rules', async ($, on) => {
+test('sections are split by faint rules across the inset width', async ($, on) => {
   engine(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const drawn = JSON.stringify(await ui.drawn())
-  // Rules span the frame's inside: 60 less the inset (2), the padding (2) and the border (2).
-  expect(drawn.match(new RegExp(`"color":"#2A2F3A"\\},"children":\\["${'─'.repeat(54)}"\\]`, 'g'))).toHaveLength(3)
-  expect(drawn.match(/"backgroundColor":"#1A1D24"/g)).toHaveLength(1)
+  // Rules span the body less the one-cell inset on each side: 60 - 2.
+  expect(drawn.match(new RegExp(`"color":"${COLORS.faint}"\\},"children":\\["${'─'.repeat(58)}"\\]`, 'g'))).toHaveLength(3)
   await ui.unmount()
 })
 
-test('the panel sits in a rounded frame inset on every side', async ($, on) => {
+test('the panel has no frame of its own, only a one-cell inset', async ($, on) => {
   engine(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  type Node = { props?: Record<string, unknown>; children?: Node[] }
+  type Node = { props?: Record<string, unknown> }
   const root = (await ui.drawn()) as Node
-  expect(root.props).toEqual(expect.objectContaining({ paddingX: 1, paddingY: 1 }))
-  const frame = root.children?.[0]
-  expect(frame?.props).toEqual(
-    expect.objectContaining({ borderStyle: 'round', borderColor: '#3A4150', gap: 1, paddingX: 1, paddingY: 1 }),
-  )
+  expect(root.props).toEqual(expect.objectContaining({ paddingX: 1, paddingY: 1, gap: 1 }))
+  expect(root.props?.borderStyle).toBeUndefined()
+  await ui.unmount()
+})
+
+test('bar tracks use the faint color that shows on the terminal background', async ($, on) => {
+  engine(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ text: /^░+$/, type: 'Text' }))?.props.color).toBe(COLORS.faint)
   await ui.unmount()
 })
 
