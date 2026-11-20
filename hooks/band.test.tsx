@@ -1,6 +1,8 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
+import { isEngineOnly } from './band'
+
 const BAND = {
   plugin: 'session-panel',
   component: 'AbovePrompt',
@@ -24,22 +26,27 @@ const MEASURE = { context: { window: 1_000_000 }, changed: ['rateLimits' as cons
 
 // Stand-ins for what the strip and the command ask the engine.
 function engine(on: On) {
+  const counts = { usage: 0 }
   on('session.id', () => ({ value: 's1' }))
   on('session.cwd', () => ({ value: '/r' }))
-  on('session.usage', () => ({
+  on('session.usage', () => {
+    counts.usage += 1
+    return {
     value: {
       startedAt: 0,
       context: { tokens: 410_000, window: 1_000_000, percent: 41 },
       rateLimits: [],
       cost: { usd: 1 },
     },
-  }))
+    }
+  })
   on('session.measure', (_, e) => ({ changed: e.changed }))
   on('ui.panes', () => ({ value: [] }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.close', () => ({ value: undefined }))
   mock.store(on)
-  return mock.clock(on)
+  mock.clock(on)
+  return counts
 }
 
 const command = (args: string) => ({ command: 'session-panel', args }) as never
@@ -116,5 +123,19 @@ test('the strip has no frame', async ($, on) => {
   await $.command.run(command('mini'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(JSON.stringify(await ui.drawn())).not.toContain('borderStyle')
+  await ui.unmount()
+})
+
+// Test hooks stand in for the engine, so a second mod's drawing is checked through the decision itself.
+test('a drawing beneath is told apart from the engine node', () => {
+  expect(isEngineOnly({ type: 'engine', ref: 1 })).toBe(true)
+  expect(isEngineOnly(undefined)).toBe(true)
+  expect(isEngineOnly({ type: 'Text', props: {}, children: ['Exit: press 1, 2 or 3'] })).toBe(false)
+})
+
+test('full view does not read usage to draw the band', async ($, on) => {
+  const counts = engine(on)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(counts.usage).toBe(0)
   await ui.unmount()
 })

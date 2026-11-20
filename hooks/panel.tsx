@@ -81,7 +81,9 @@ export async function setupPanel($: EngineInterface): Promise<void> {
   })
   const mode = await loadViewMode($)
   await setView($, { mode, isShown: true })
+  // A pane left up from before (another session switched to mini) closes, so only one view shows.
   if (mode === 'full') void $.ui.open(PANE_OPEN)
+  else await $.ui.close({ id: PANE })
   tick?.cancel()
   tick = $.clock.every(SPIN_MS, async () => {
     const [at, isTurnRunning, last, agents] = await Promise.all([

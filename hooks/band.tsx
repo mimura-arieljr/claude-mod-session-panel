@@ -8,20 +8,28 @@ import { COLORS, eighthBar, limitColor } from './visuals'
 const BAR_CELLS = 8
 const GAP = 3
 
+export function isEngineOnly(drawn: unknown): boolean {
+  return drawn === null || drawn === undefined || (drawn as { type?: unknown }).type === 'engine'
+}
+
 type Segment = { key: string; width: number; node: RenderChildren; isTools?: boolean }
 
 export function registerBand(on: On): void {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    // Only `view` is read first, so the full view never redraws the band on a tick.
+    const view = await readView($)
+    if (view.mode !== 'mini' || !view.isShown || e.props.hasSurvey) return next(e)
+    // Another mod drawing here (an exit prompt, say) goes first; bare, `next` gives the engine's node.
+    const below = await next(e)
+    if (!isEngineOnly(below)) return below
     // Reading `now` subscribes the strip to the clock tick, as the pane does.
-    const [view, t, limits, , at, { context }] = await Promise.all([
-      readView($),
+    const [t, limits, , at, { context }] = await Promise.all([
       readThread($),
       readLimits($),
       readNow($),
       $.clock.now(),
       $.session.usage(),
     ])
-    if (view.mode !== 'mini' || !view.isShown || e.props.hasSurvey) return next(e)
     const { Box, Text } = $.ui.resolve(e)
 
     const bar = (fraction: number, color: string) => {

@@ -6,10 +6,10 @@ import { MINI_HIDDEN, MINI_SHOWN, USAGE_HINT, parseViewArg } from './view'
 const START = { cwd: '/r', surface: 'terminal', isInteractive: true } as const
 
 // Stand-ins for the engine: a pane list that open and close keep, and a store the test can read.
-function engine(on: On, initial: Record<string, unknown> = {}) {
+function engine(on: On, initial: Record<string, unknown> = {}, isPaneOpen = false) {
   const calls: string[] = []
   const store: Record<string, unknown> = { ...initial }
-  let isPaneUp = false
+  let isPaneUp = isPaneOpen
   on('session.id', () => ({ value: 's1' }))
   on('session.cwd', () => ({ value: '/r' }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -97,5 +97,11 @@ test('an unknown argument changes nothing', async ($, on) => {
 test('a session stored as mini does not open the pane', async ($, on) => {
   const { calls } = engine(on, { 'view-mode': 'mini' })
   await $.session.start(START)
-  expect(calls).toEqual([])
+  expect(calls).not.toContain('open')
+})
+
+test('a session starting in mini closes a pane left up from before', async ($, on) => {
+  const { calls } = engine(on, { 'view-mode': 'mini' }, true)
+  await $.session.start(START)
+  expect(calls).toEqual(['close'])
 })
