@@ -8,6 +8,8 @@ import { COLORS, eighthBar, limitColor } from './visuals'
 const BAR_CELLS = 8
 // Between usage segments on one row: a dim bar with room either side.
 const SEPARATOR = '  │  '
+// Lines the strip up with the names in the `/` suggestions above it.
+const INSET = 4
 
 export function isEngineOnly(drawn: unknown): boolean {
   return drawn === null || drawn === undefined || (drawn as { type?: unknown }).type === 'engine'
@@ -85,11 +87,11 @@ export function registerBand(on: On): void {
 
     const rows = packSegments(
       segments.map(s => s.width),
-      e.props.bodyColumns,
+      e.props.bodyColumns - INSET,
       SEPARATOR.length,
     )
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" paddingLeft={INSET}>
         {rows.map((row, r) => (
           <Box key={`mini-row-${r}`} flexDirection="row">
             {row.map((i, n) => {

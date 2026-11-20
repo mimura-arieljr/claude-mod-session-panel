@@ -169,3 +169,13 @@ test('dividers and bar tracks use colors that show on the terminal background', 
   expect((await ui.find({ text: /^░+$/, type: 'Text' }))?.props.color).toBe(COLORS.bandTrack)
   await ui.unmount()
 })
+
+// The `/` suggestions start their names 4 columns in; the strip lines up with them.
+test('the strip is inset to line up with the slash suggestions', async ($, on) => {
+  engine(on)
+  await $.command.run(command('mini'))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  type Node = { props?: Record<string, unknown> }
+  expect(((await ui.drawn()) as Node).props?.paddingLeft).toBe(4)
+  await ui.unmount()
+})
