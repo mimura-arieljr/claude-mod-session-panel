@@ -91,7 +91,7 @@ export function registerBand(on: On): void {
       SEPARATOR.length,
     )
     return (
-      <Box flexDirection="column" paddingLeft={INSET}>
+      <Box flexDirection="column" paddingLeft={INSET} paddingTop={1}>
         {rows.map((row, r) => (
           <Box key={`mini-row-${r}`} flexDirection="row">
             {row.map((i, n) => {

@@ -171,11 +171,13 @@ test('dividers and bar tracks use colors that show on the terminal background', 
 })
 
 // The `/` suggestions start their names 4 columns in; the strip lines up with them.
-test('the strip is inset to line up with the slash suggestions', async ($, on) => {
+test('the strip is inset and spaced from the slash suggestions', async ($, on) => {
   engine(on)
   await $.command.run(command('mini'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   type Node = { props?: Record<string, unknown> }
   expect(((await ui.drawn()) as Node).props?.paddingLeft).toBe(4)
+  // One blank row keeps it off the suggestions.
+  expect(((await ui.drawn()) as Node).props?.paddingTop).toBe(1)
   await ui.unmount()
 })
