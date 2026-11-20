@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import {
+  packSegments,
   addMcp,
   agentTree,
   describeToolCall,
@@ -210,4 +211,11 @@ test('agents nest under their parent, in start order', async () => {
     ['c', 1],
     ['b', 0],
   ])
+})
+
+test('segments pack into rows by width', () => {
+  expect(packSegments([10, 10, 10], 40, 3)).toEqual([[0, 1, 2]])
+  expect(packSegments([10, 10, 10], 25, 3)).toEqual([[0, 1], [2]])
+  expect(packSegments([50, 5], 40, 3)).toEqual([[0], [1]])
+  expect(packSegments([], 40, 3)).toEqual([])
 })

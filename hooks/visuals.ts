@@ -84,3 +84,10 @@ export function groupByFolder(files: readonly FileEntry[]): { dir: string; files
   }
   return [...groups].map(([dir, grouped]) => ({ dir, files: grouped }))
 }
+
+// A plan limit's bar color: muted when stale, amber from 80%, red from 95%.
+export function limitColor(percentUsed: number, isStale: boolean): string {
+  if (isStale) return COLORS.muted
+  if (percentUsed >= 95) return COLORS.removed
+  return percentUsed >= 80 ? COLORS.amber : COLORS.accent
+}

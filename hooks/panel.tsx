@@ -12,6 +12,8 @@ import {
   formatTokens,
   formatUsd,
   isAgentDone,
+  LIMIT_LABEL,
+  LIMITS_STALE_MS,
   toggleSection,
 } from './model'
 import {
@@ -28,7 +30,7 @@ import {
   setView,
 } from './thread-state'
 import { MINI_HIDDEN, MINI_SHOWN, USAGE_HINT, loadViewMode, parseViewArg, saveViewMode } from './view'
-import { COLORS, diffBar, diffCells, eighthBar, groupByFolder, splitPath } from './visuals'
+import { COLORS, diffBar, diffCells, eighthBar, groupByFolder, limitColor, splitPath } from './visuals'
 
 export const PANE = 'session-panel'
 const TITLE = 'Session'
@@ -43,9 +45,6 @@ const LABEL_COLUMNS = 6
 // Inset outside and inside the rounded frame: one cell, just enough to show.
 const INSET_X = 1
 const INSET_Y = 1
-// After this long without a new response, the plan limits may lag other sessions.
-const LIMITS_STALE_MS = 5 * 60_000
-const LIMIT_LABEL: Record<string, string> = { five_hour: '5h', seven_day: 'week', spend_limit: 'spend' }
 const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 const SPIN_MS = 250
 // How often the agent list is re-read while an agent is unfinished.
@@ -362,13 +361,7 @@ export function registerPanel(on: On, ttlMs: number): void {
     const offsetMinutes = new Date(at).getTimezoneOffset()
     const limitRow = (w: (typeof limits.windows)[number]) => {
       const fill = eighthBar(w.percentUsed / 100, barCells)
-      const color = isLimitsStale
-        ? COLORS.muted
-        : w.percentUsed >= 95
-          ? COLORS.removed
-          : w.percentUsed >= 80
-            ? COLORS.amber
-            : COLORS.accent
+      const color = limitColor(w.percentUsed, isLimitsStale)
       return (
         <Box key={`limit-${w.kind}`} flexDirection="row" justifyContent="space-between">
           <Text>

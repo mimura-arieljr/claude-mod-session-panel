@@ -347,3 +347,25 @@ export function agentTree(rows: readonly AgentRow[]): { row: AgentRow; depth: nu
   walk(undefined, 0)
   return out
 }
+
+// Plan limit labels, shared by the full and mini views.
+export const LIMIT_LABEL: Record<string, string> = { five_hour: '5h', seven_day: 'week', spend_limit: 'spend' }
+// After this long without a new response, the plan limits may lag other sessions.
+export const LIMITS_STALE_MS = 5 * 60_000
+
+// Greedy row fill: segment indexes per row, a segment wider than the row alone on its own.
+export function packSegments(widths: readonly number[], columns: number, gap: number): number[][] {
+  const rows: number[][] = []
+  let used = 0
+  widths.forEach((width, i) => {
+    const row = rows.at(-1)
+    if (row !== undefined && used + gap + width <= columns) {
+      row.push(i)
+      used += gap + width
+      return
+    }
+    rows.push([i])
+    used = width
+  })
+  return rows
+}
