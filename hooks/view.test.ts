@@ -14,7 +14,7 @@ function engine(on: On, initial: Record<string, unknown> = {}) {
   on('session.cwd', () => ({ value: '/r' }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'session-panel' } }))
-  on('tool.register', () => ({ value: { name: 'note_assumption' } }))
+  on('tool.register', () => ({ value: { tool: 'note_assumption' } }))
   on('ui.panes', () => ({
     value: isPaneUp
       ? [{ id: 'session-panel', title: 'Session', isShown: true, isFocused: false, isPlaced: true }]
@@ -44,7 +44,7 @@ function engine(on: On, initial: Record<string, unknown> = {}) {
 }
 
 const run = (
-  $: { command: { run(args: never): Promise<{ text: string }> } },
+  $: { command: { run(args: never): Promise<{ text?: string }> } },
   args: string,
 ) => $.command.run({ command: 'session-panel', args } as never)
 
