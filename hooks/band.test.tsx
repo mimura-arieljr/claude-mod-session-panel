@@ -60,7 +60,7 @@ test('the band draws nothing of ours in full view', async ($, on) => {
   }
 })
 
-test('mini view draws context, limits and tools on one row when wide', async ($, on) => {
+test('mini view puts usage on one row and tools on the next when wide', async ($, on) => {
   engine(on)
   on('tool.call', () => ({ result: { success: true, commandName: 'run' } }))
   await $.tool.call({ tool: 'Skill', skill: 'run' })
@@ -72,21 +72,35 @@ test('mini view draws context, limits and tools on one row when wide', async ($,
     expect(await ui.find({ text: /^ 41%/ })).toBeDefined()
     expect(await ui.find({ text: /^5h/ })).toBeDefined()
     expect(await ui.find({ text: /^week/ })).toBeDefined()
-    expect(await ui.find({ text: /1 skill/ })).toBeDefined()
-    expect(await ui.find({ text: /run ×1/ })).toBeDefined()
     expect(await ui.find({ key: 'mini-row-0' })).toBeDefined()
     expect(await ui.find({ key: 'mini-row-1' })).toBeUndefined()
+    const tools = await ui.find({ key: 'mini-tools' })
+    expect(tools?.text).toContain('Skills & MCPs invoked')
+    expect(tools?.text).toContain('run ×1')
     await ui.unmount()
   }
 })
 
-test('a narrow band wraps segments onto more rows', async ($, on) => {
+test('usage segments on one row are split by a dim bar', async ($, on) => {
+  engine(on)
+  await $.session.measure({ ...MEASURE, rateLimits: LIMITS })
+  await $.command.run(command('mini'))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const row = await ui.find({ key: 'mini-row-0' })
+  expect(row?.text.split('│').length).toBe(3)
+  await ui.unmount()
+})
+
+test('a narrow band wraps segments onto more rows, no bar at a row start', async ($, on) => {
   engine(on)
   await $.session.measure({ ...MEASURE, rateLimits: LIMITS })
   await $.command.run(command('mini'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: 40 } })
-  expect(await ui.find({ key: 'mini-row-1' })).toBeDefined()
+  const second = await ui.find({ key: 'mini-row-1' })
+  expect(second).toBeDefined()
+  expect(second?.text.trimStart().startsWith('│')).toBe(false)
   expect(await ui.find({ text: /^week/ })).toBeDefined()
+  expect(await ui.find({ key: 'mini-tools' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -95,7 +109,7 @@ test('with no limits or tools the strip shows context and none yet', async ($, o
   await $.command.run(command('mini'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await ui.find({ text: /^ctx/ })).toBeDefined()
-  expect(await ui.find({ text: /none yet/ })).toBeDefined()
+  expect((await ui.find({ key: 'mini-tools' }))?.text).toContain('none yet')
   expect(await ui.find({ text: /^5h/ })).toBeUndefined()
   expect(await ui.find({ key: 'mini-row-1' })).toBeUndefined()
   await ui.unmount()

@@ -6,13 +6,14 @@ import { COLORS, eighthBar, limitColor } from './visuals'
 
 // The mini view: a frameless strip in the band above the prompt.
 const BAR_CELLS = 8
-const GAP = 3
+// Between usage segments on one row: a dim bar with room either side.
+const SEPARATOR = '  │  '
 
 export function isEngineOnly(drawn: unknown): boolean {
   return drawn === null || drawn === undefined || (drawn as { type?: unknown }).type === 'engine'
 }
 
-type Segment = { key: string; width: number; node: RenderChildren; isTools?: boolean }
+type Segment = { key: string; width: number; node: RenderChildren }
 
 export function registerBand(on: On): void {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -48,7 +49,7 @@ export function registerBand(on: On): void {
         width: 4 + BAR_CELLS + ctxPercent.length,
         node: (
           <Text>
-            <Text color={COLORS.muted}>{'ctx '}</Text>
+            <Text color={COLORS.label} bold>{'ctx '}</Text>
             {bar(percent / 100, COLORS.accent)}
             <Text color={COLORS.text}>{ctxPercent}</Text>
           </Text>
@@ -67,7 +68,7 @@ export function registerBand(on: On): void {
         width: label.length + BAR_CELLS + pct.length + reset.length,
         node: (
           <Text>
-            <Text color={COLORS.muted}>{label}</Text>
+            <Text color={COLORS.label} bold>{label}</Text>
             {bar(w.percentUsed / 100, limitColor(w.percentUsed, isStale))}
             <Text color={isStale ? COLORS.muted : COLORS.text}>{pct}</Text>
             {reset !== '' && <Text color={COLORS.muted}>{reset}</Text>}
@@ -76,32 +77,16 @@ export function registerBand(on: On): void {
       })
     }
 
-    // Tools: packed by the summary's width; on its row it grows and the names truncate.
-    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
-    const hasTools = t.skills.length + t.mcps.length > 0
-    const summary = hasTools
-      ? `✦ ${plural(t.skills.length, 'skill')} · ${plural(t.mcps.length, 'mcp')}`
-      : '✦ none yet'
+    // Tools: always their own row, names truncated to fit.
     const names = [
       ...t.skills.map(skill => `${skill.name} ×${skill.count}`),
       ...t.mcps.map(mcp => `${mcp.server} ×${mcp.count}`),
     ].join(' · ')
-    segments.push({
-      key: 'tools',
-      width: summary.length,
-      isTools: true,
-      node: (
-        <Text wrap="truncate-end">
-          <Text color={COLORS.accent}>{summary}</Text>
-          {names !== '' && <Text color={COLORS.text}>{`   ${names}`}</Text>}
-        </Text>
-      ),
-    })
 
     const rows = packSegments(
       segments.map(s => s.width),
       e.props.bodyColumns,
-      GAP,
+      SEPARATOR.length,
     )
     return (
       <Box flexDirection="column">
@@ -110,18 +95,23 @@ export function registerBand(on: On): void {
             {row.map((i, n) => {
               const s = segments[i]!
               return (
-                <Box
-                  key={s.key}
-                  marginLeft={n === 0 ? 0 : GAP}
-                  flexShrink={s.isTools === true ? 1 : 0}
-                  flexGrow={s.isTools === true ? 1 : 0}
-                >
+                <Box key={s.key} flexShrink={0}>
+                  {n > 0 && <Text color={COLORS.rule}>{SEPARATOR}</Text>}
                   {s.node}
                 </Box>
               )
             })}
           </Box>
         ))}
+        <Box key="mini-tools" flexDirection="row">
+          <Text wrap="truncate-end">
+            <Text color={COLORS.accent}>{'✦ '}</Text>
+            <Text color={COLORS.label} bold>
+              Skills & MCPs invoked
+            </Text>
+            <Text color={names === '' ? COLORS.muted : COLORS.text}>{`  ${names === '' ? 'none yet' : names}`}</Text>
+          </Text>
+        </Box>
       </Box>
     )
   })
