@@ -67,7 +67,7 @@ test('resume without a snapshot says so', async ($, on) => {
 test('starting with --resume and no snapshot says so', async ($, on) => {
   const { thread } = engine(on)
   on('classic.SessionStart', () => ({}))
-  await $.classic.SessionStart({ source: 'resume' })
+  await $.classic.SessionStart({ source: 'resume', session_id: 's1' })
   await $.session.start(START)
   expect(thread()).toEqual({ ...emptyThread('s1'), isTrackingSinceResume: true })
 })
@@ -119,7 +119,7 @@ test('clear empties the thread before the next prompt', async ($, on) => {
   await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } })
   expect(thread().files).toEqual([])
   session.id = 's2'
-  await $.classic.SessionStart({ source: 'clear' })
+  await $.classic.SessionStart({ source: 'clear', session_id: 's2' })
   expect(thread()).toEqual(emptyThread('s2'))
 })
 
@@ -130,14 +130,14 @@ test('resume shows the snapshot before the next prompt', async ($, on) => {
   await $.session.start(START)
   await $.session.end({ reason: 'resume', sessionId: 's1', resume: { id: 's1' } })
   session.id = 's0'
-  await $.classic.SessionStart({ source: 'resume' })
+  await $.classic.SessionStart({ source: 'resume', session_id: 's0' })
   expect(thread()).toEqual(saved)
 })
 
 test('starting with --fork-session says tracking started late', async ($, on) => {
   const { thread } = engine(on)
   on('classic.SessionStart', () => ({}))
-  await $.classic.SessionStart({ source: 'fork' })
+  await $.classic.SessionStart({ source: 'fork', session_id: 's1' })
   await $.session.start(START)
   expect(thread()).toEqual({ ...emptyThread('s1'), isTrackingSinceResume: true })
 })
@@ -148,7 +148,54 @@ test('an in-process fork still copies the thread', async ($, on) => {
   await $.session.start(START)
   await $.tool.call(EDIT)
   session.id = 's3'
-  await $.classic.SessionStart({ source: 'fork' })
+  await $.classic.SessionStart({ source: 'fork', session_id: 's3' })
   expect(thread().sessionId).toBe('s3')
   expect(thread().files).toEqual([FILE])
+})
+
+test('resume stops showing the previous thread at once', async ($, on) => {
+  const { thread } = engine(on)
+  await $.session.start(START)
+  await $.tool.call(EDIT)
+  await $.session.end({ reason: 'resume', sessionId: 's1', resume: { id: 's1' } })
+  expect(thread().files).toEqual([])
+})
+
+test('resume loads the snapshot named by SessionStart while the old id lingers', async ($, on) => {
+  const saved: Thread = { ...emptyThread('s0'), files: [FILE] }
+  const { thread } = engine(on, { 'thread:s0': saved })
+  on('classic.SessionStart', () => ({}))
+  await $.session.start(START)
+  await $.tool.call(EDIT)
+  await $.session.end({ reason: 'resume', sessionId: 's1', resume: { id: 's1' } })
+  // The engine still answers the old id here: the hook's own session_id is the new one.
+  await $.classic.SessionStart({ source: 'resume', session_id: 's0' })
+  expect(thread()).toEqual(saved)
+})
+
+test('a late session.end leaves the resumed thread alone', async ($, on) => {
+  const saved: Thread = { ...emptyThread('s0'), files: [FILE] }
+  const { session, thread } = engine(on, { 'thread:s0': saved })
+  on('classic.SessionStart', () => ({}))
+  await $.session.start(START)
+  session.id = 's0'
+  await $.classic.SessionStart({ source: 'resume', session_id: 's0' })
+  await $.session.end({ reason: 'resume', sessionId: 's1', resume: { id: 's1' } })
+  expect(thread()).toEqual(saved)
+})
+
+test('clear and resume drop the previous conversation agents', async ($, on) => {
+  engine(on)
+  let agents: unknown = undefined
+  on('state.set', { plugin: 'session-panel', key: 'agents' }, (_, e, next) => {
+    agents = e.value
+    return next(e)
+  })
+  on('agent.list', () => ({ value: [{ id: 'a1', type: 'Explore', description: 'x', status: 'running' }] as never }))
+  on('agent.spawn', () => ({ model: 'm', agentId: 'a1' }))
+  await $.session.start(START)
+  await $.agent.spawn({ description: 'd', prompt: 'p', subagentType: 'Explore' } as never)
+  expect((agents as { rows: unknown[] }).rows.length).toBe(1)
+  await $.session.end({ reason: 'resume', sessionId: 's1', resume: { id: 's1' } })
+  expect(agents).toEqual({ rows: [], isWatching: false })
 })

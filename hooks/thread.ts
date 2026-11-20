@@ -6,6 +6,7 @@ import {
   changeThread,
   readPendingSwitch,
   readThread,
+  resetAgents,
   setPendingSwitch,
   setTurnRunning,
   setTurnStartedAt,
@@ -24,8 +25,9 @@ function snapshotKey(id: string): string {
 }
 
 // Brings `thread` in line with the session id after a clear, resume or fork.
-export async function syncThread($: StoreDollar): Promise<Thread> {
-  const id = await $.session.id()
+// - `sessionId` is the caller's new id when it knows it; else the engine's is asked.
+export async function syncThread($: StoreDollar, sessionId?: string): Promise<Thread> {
+  const id = sessionId ?? (await $.session.id())
   const current = await readThread($)
   if (current.sessionId === id) return current
 
@@ -66,17 +68,20 @@ export function registerThread(on: On): void {
       // A process started with --fork-session can't find its parent: say tracking started late.
       await setPendingSwitch($, 'resume')
     }
-    if (e.source !== 'startup') await syncThread($)
+    // The hook's own id: `$.session.id()` may still answer the old one here.
+    if (e.source !== 'startup') await syncThread($, e.session_id)
     return next(e)
   }).catch(($, e, next) => next(e))
 
   on('session.end', async ($, e, next) => {
-    await saveSnapshot($, await readThread($))
-    if (e.reason === 'clear') {
-      // Empty the pane now: no session.start follows a /clear.
+    const t = await readThread($)
+    await saveSnapshot($, t)
+    // A SessionStart that already synced the next thread must not be undone.
+    const isEndingThread = t.sessionId === e.sessionId || t.sessionId === ''
+    if ((e.reason === 'clear' || e.reason === 'resume') && isEndingThread) {
+      // Empty the pane now: the old conversation never shows under the new one.
       await changeThread($, () => emptyThread(''))
-    }
-    if (e.reason === 'clear' || e.reason === 'resume') {
+      await resetAgents($)
       await setPendingSwitch($, e.reason)
     }
     return next(e)

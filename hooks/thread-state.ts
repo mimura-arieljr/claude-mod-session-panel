@@ -73,6 +73,12 @@ export function changeAgents($: StateDollar, fn: (a: Agents) => Agents): Promise
   return update($, agents, fn)
 }
 
+// A switched conversation starts with no subagents listed.
+export async function resetAgents($: StateDollar): Promise<void> {
+  await update($, agents, () => ({ rows: [], isWatching: false }))
+  await update($, agentActivity, () => ({}))
+}
+
 export function readAgentActivity($: StateDollar): Promise<Record<string, string>> {
   return read($, agentActivity)
 }
