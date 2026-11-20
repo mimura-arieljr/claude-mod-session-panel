@@ -105,9 +105,8 @@ export function registerBand(on: On): void {
         ))}
         <Box key="mini-tools" flexDirection="row">
           <Text wrap="truncate-end">
-            <Text color={COLORS.accent}>{'✦ '}</Text>
             <Text color={COLORS.label} bold>
-              Skills & MCPs invoked
+              Skills & MCPs
             </Text>
             <Text color={names === '' ? COLORS.muted : COLORS.text}>{`  ${names === '' ? 'none yet' : names}`}</Text>
           </Text>

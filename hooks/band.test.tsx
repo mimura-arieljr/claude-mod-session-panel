@@ -75,7 +75,9 @@ test('mini view puts usage on one row and tools on the next when wide', async ($
     expect(await ui.find({ key: 'mini-row-0' })).toBeDefined()
     expect(await ui.find({ key: 'mini-row-1' })).toBeUndefined()
     const tools = await ui.find({ key: 'mini-tools' })
-    expect(tools?.text).toContain('Skills & MCPs invoked')
+    // Starts in the first column, under `ctx`.
+    expect(tools?.text.startsWith('Skills & MCPs ')).toBe(true)
+    expect(tools?.text).not.toContain('invoked')
     expect(tools?.text).toContain('run ×1')
     await ui.unmount()
   }
