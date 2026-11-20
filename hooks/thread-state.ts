@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { StateDollar } from 'claude-code'
 
-import type { Agents, Limits, PendingSwitch, Thread } from '../types'
+import type { Agents, Limits, PendingSwitch, Thread, View } from '../types'
 import { emptyThread } from './model'
 
 // The engine only lets the file that defines an atom read or write it, so every access lives here.
@@ -23,6 +23,7 @@ const agentActivity = atom(
   {} as Record<string, string>,
 )
 const now = atom({ plugin: 'session-panel', key: 'now' } as const, 0)
+const view = atom({ plugin: 'session-panel', key: 'view' } as const, { mode: 'full', isShown: true } as View)
 
 export function readThread($: StateDollar): Promise<Thread> {
   return read($, thread)
@@ -86,4 +87,12 @@ export function readNow($: StateDollar): Promise<number> {
 
 export function setNow($: StateDollar, value: number): Promise<number> {
   return update($, now, () => value)
+}
+
+export function readView($: StateDollar): Promise<View> {
+  return read($, view)
+}
+
+export function setView($: StateDollar, value: View): Promise<View> {
+  return update($, view, () => value)
 }

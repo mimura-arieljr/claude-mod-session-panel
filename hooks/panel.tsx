@@ -23,8 +23,11 @@ import {
   readThread,
   readTurnRunning,
   readTurnStartedAt,
+  readView,
   setNow,
+  setView,
 } from './thread-state'
+import { MINI_HIDDEN, MINI_SHOWN, USAGE_HINT, loadViewMode, parseViewArg, saveViewMode } from './view'
 import { COLORS, diffBar, diffCells, eighthBar, groupByFolder, splitPath } from './visuals'
 
 export const PANE = 'session-panel'
@@ -71,10 +74,15 @@ const PANE_OPEN = { id: PANE, title: TITLE, columns: DOCK_COLUMNS, backgroundCol
 
 let tick: { cancel(): void } | undefined
 
-// Called from session.start: registers the command, opens the pane, starts the clock tick.
+// Called from session.start: registers the command, opens the pane in full view, starts the clock tick.
 export async function setupPanel($: EngineInterface): Promise<void> {
-  await $.command.register({ name: 'session-panel', description: 'Show or hide the session panel' })
-  void $.ui.open(PANE_OPEN)
+  await $.command.register({
+    name: 'session-panel',
+    description: 'Show or hide the session panel; "mini" switches to the strip above the prompt',
+  })
+  const mode = await loadViewMode($)
+  await setView($, { mode, isShown: true })
+  if (mode === 'full') void $.ui.open(PANE_OPEN)
   tick?.cancel()
   tick = $.clock.every(SPIN_MS, async () => {
     const [at, isTurnRunning, last, agents] = await Promise.all([
@@ -126,15 +134,37 @@ function placementNote(presentation: { isFullscreen: boolean; columns: number } 
 
 export function registerPanel(on: On, ttlMs: number): void {
   on('command.run', { command: 'session-panel' }, async ($, e) => {
+    const ask = parseViewArg(e.args)
+    if (ask === 'unknown') return { text: USAGE_HINT }
+    const view = await readView($)
+    if (ask === 'mini') {
+      // Only one view is ever up: switching closes or reopens the full pane.
+      if (view.mode === 'full') {
+        await $.ui.close({ id: PANE })
+        await setView($, { mode: 'mini', isShown: true })
+        await saveViewMode($, 'mini')
+        return { text: MINI_SHOWN }
+      }
+      await setView($, { mode: 'full', isShown: true })
+      await saveViewMode($, 'full')
+      await $.ui.open(PANE_OPEN)
+      return { text: placementNote(e.presentation) }
+    }
+    if (view.mode === 'mini') {
+      await setView($, { mode: 'mini', isShown: !view.isShown })
+      return { text: view.isShown ? MINI_HIDDEN : MINI_SHOWN }
+    }
     // A pane waiting for room, or a tab behind another, counts as not open.
     const isOpen = (await $.ui.panes()).some(
       pane => pane.id === PANE && pane.isPlaced && pane.isShown,
     )
     if (isOpen) {
       await $.ui.close({ id: PANE })
+      await setView($, { mode: 'full', isShown: false })
       return { text: 'Session panel hidden.' }
     }
     await $.ui.open(PANE_OPEN)
+    await setView($, { mode: 'full', isShown: true })
     return { text: placementNote(e.presentation) }
   })
 

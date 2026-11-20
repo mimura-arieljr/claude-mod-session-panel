@@ -22,6 +22,9 @@ export type AgentRow = {
 // The agents shown, and whether any still needs watching
 export type Agents = { rows: AgentRow[]; isWatching: boolean }
 export type PendingSwitch = 'clear' | 'resume' | null
+// Which view is up: the full pane or the mini strip above the prompt
+export type ViewMode = 'full' | 'mini'
+export type View = { mode: ViewMode; isShown: boolean }
 export type Thread = {
   sessionId: string
   todos: Todo[]
@@ -50,6 +53,7 @@ declare module 'claude-code' {
       // Each agent's latest tool call, by agent id
       agentActivity: Record<string, string>
       now: number
+      view: View
     }
   }
 }
