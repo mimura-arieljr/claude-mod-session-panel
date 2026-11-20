@@ -49,7 +49,7 @@ export function registerBand(on: On): void {
         width: 4 + BAR_CELLS + ctxPercent.length,
         node: (
           <Text>
-            <Text color={COLORS.label} bold>{'ctx '}</Text>
+            <Text color={COLORS.label} bold>{'Ctx '}</Text>
             {bar(percent / 100, COLORS.accent)}
             <Text color={COLORS.text}>{ctxPercent}</Text>
           </Text>

@@ -56,7 +56,7 @@ test('the band draws nothing of ours in full view', async ($, on) => {
   engine(on)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...BAND, surface })
-    expect(await ui.find({ text: /^ctx/ })).toBeUndefined()
+    expect(await ui.find({ text: /^Ctx/ })).toBeUndefined()
     await ui.unmount()
   }
 })
@@ -69,14 +69,14 @@ test('mini view puts usage on one row and tools on the next when wide', async ($
   await $.command.run(command('mini'))
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...BAND, surface })
-    expect(await ui.find({ text: /^ctx/ })).toBeDefined()
+    expect(await ui.find({ text: /^Ctx/ })).toBeDefined()
     expect(await ui.find({ text: /^ 41%/ })).toBeDefined()
     expect(await ui.find({ text: /^5h/ })).toBeDefined()
     expect(await ui.find({ text: /^week/ })).toBeDefined()
     expect(await ui.find({ key: 'mini-row-0' })).toBeDefined()
     expect(await ui.find({ key: 'mini-row-1' })).toBeUndefined()
     const tools = await ui.find({ key: 'mini-tools' })
-    // Starts in the first column, under `ctx`.
+    // Starts in the first column, under `Ctx`.
     expect(tools?.text.startsWith('Skills & MCPs ')).toBe(true)
     expect(tools?.text).not.toContain('invoked')
     expect(tools?.text).toContain('run ×1')
@@ -111,7 +111,7 @@ test('with no limits or tools the strip shows context and none yet', async ($, o
   engine(on)
   await $.command.run(command('mini'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await ui.find({ text: /^ctx/ })).toBeDefined()
+  expect(await ui.find({ text: /^Ctx/ })).toBeDefined()
   expect((await ui.find({ key: 'mini-tools' }))?.text).toContain('none yet')
   expect(await ui.find({ text: /^5h/ })).toBeUndefined()
   expect(await ui.find({ key: 'mini-row-1' })).toBeUndefined()
@@ -122,7 +122,7 @@ test('the band yields to a survey', async ($, on) => {
   engine(on)
   await $.command.run(command('mini'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, hasSurvey: true } })
-  expect(await ui.find({ text: /^ctx/ })).toBeUndefined()
+  expect(await ui.find({ text: /^Ctx/ })).toBeUndefined()
   await ui.unmount()
 })
 
@@ -131,7 +131,7 @@ test('hidden mini view draws nothing', async ($, on) => {
   await $.command.run(command('mini'))
   await $.command.run(command(''))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await ui.find({ text: /^ctx/ })).toBeUndefined()
+  expect(await ui.find({ text: /^Ctx/ })).toBeUndefined()
   await ui.unmount()
 })
 
