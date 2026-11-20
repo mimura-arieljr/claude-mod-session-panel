@@ -73,6 +73,8 @@ test('mini view puts usage on one row and tools on the next when wide', async ($
     expect(await ui.find({ text: /^ 41%/ })).toBeDefined()
     expect(await ui.find({ text: /^5h/ })).toBeDefined()
     expect(await ui.find({ text: /^week/ })).toBeDefined()
+    expect(await ui.find({ text: /^ resets \S/ })).toBeDefined()
+    expect(await ui.find({ text: /↻/ })).toBeUndefined()
     expect(await ui.find({ key: 'mini-row-0' })).toBeDefined()
     expect(await ui.find({ key: 'mini-row-1' })).toBeUndefined()
     const tools = await ui.find({ key: 'mini-tools' })

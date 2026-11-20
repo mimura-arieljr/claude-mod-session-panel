@@ -62,7 +62,7 @@ export function registerBand(on: On): void {
     for (const w of limits.windows) {
       const label = `${LIMIT_LABEL[w.kind] ?? w.kind} `
       const pct = ` ${Math.round(w.percentUsed)}%`
-      const reset = w.resetsAt === undefined ? '' : ` ↻${formatReset(w.resetsAt, at, offsetMinutes)}`
+      const reset = w.resetsAt === undefined ? '' : ` resets ${formatReset(w.resetsAt, at, offsetMinutes)}`
       segments.push({
         key: `limit-${w.kind}`,
         width: label.length + BAR_CELLS + pct.length + reset.length,

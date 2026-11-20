@@ -11,7 +11,7 @@ A rounded frame with a status line on top, then collapsible sections split by di
 - **Skills & MCPs**: every skill and MCP tool used in the thread, with counts.
 - **Assumptions**: numbered things Claude assumed that you didn't say, recorded live through a `note_assumption` tool.
 
-A **mini view** swaps the pane for a frameless strip in the band above the prompt, for split or narrow terminals: context fill and the 5-hour and weekly limits on one row split by dim bars (wrapping when narrow), then Skills & MCPs on a row of their own.
+A **mini view** swaps the pane for a frameless strip in the band above the prompt, for split or narrow terminals: context fill and the 5-hour and weekly limits on one row split by dim bars (each with its reset time, wrapping when narrow), then Skills & MCPs on a row of their own.
 
 Totals cover the whole chat thread. `/clear` starts fresh; `/resume` brings a thread's totals back.
 
