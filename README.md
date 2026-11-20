@@ -11,6 +11,8 @@ A rounded frame with a status line on top, then collapsible sections split by di
 - **Skills & MCPs**: every skill and MCP tool used in the thread, with counts.
 - **Assumptions**: numbered things Claude assumed that you didn't say, recorded live through a `note_assumption` tool.
 
+A **mini view** swaps the pane for a frameless strip in the band above the prompt, for split or narrow terminals: context fill, the 5-hour and weekly limits, and Skills & MCPs. It fits one row when wide and wraps when narrow.
+
 Totals cover the whole chat thread. `/clear` starts fresh; `/resume` brings a thread's totals back.
 
 ## Install
@@ -30,7 +32,8 @@ claude plugin install session-panel --marketplace mimura-arieljr/claude-mod-sess
 ## Use
 
 - The pane opens at session start on terminals 144+ columns wide.
-- `/session-panel` shows or hides it at any width, and says where it went.
+- `/session-panel` shows or hides the current view at any width, and says where it went.
+- `/session-panel mini` switches between the full pane and the mini strip. Only one is up at a time, and the last one you picked is used next session.
 - It docks beside the chat in fullscreen layout (`"tui": "fullscreen"`) on terminals 110+ columns wide; otherwise it sits above the prompt.
 - Click a section title (or Tab to it and press Enter) to collapse or expand it.
 - Click a file name to open it in VS Code (through its `vscode://` handler).
@@ -61,13 +64,15 @@ All in `hooks/`; each has a `*.test.ts(x)` beside it.
 - `hooks.json`: loads `./register.tsx` as the mod's only hooks module.
 - `register.tsx`: entry point. Its one `session.start` hook syncs the thread, registers the assumption tool and sets up the panel; it wires up every other part's hooks.
 - `panel.tsx`: the `/session-panel` command, the docked pane, the clock tick (spinner frames, agent polling, the minute countdown) and the pane's drawing.
+- `view.ts`: the remembered view (`full` or `mini`, in the store) and the command's argument parsing and replies.
+- `band.tsx`: the mini view, drawn into the band above the prompt; it steps aside while the engine's rating survey holds the band.
 - `agents.ts`: reads `$.agent.list()` into the Agents rows on `agent.spawn`, then every 2s while any agent is unfinished.
 - `collect.ts`: watches tool calls (Edit/Write/NotebookEdit, TodoWrite, TaskCreate/TaskUpdate, MCP, each subagent's latest call), skills, `turn.complete` usage and `session.measure` rate limits.
 - `assumptions.ts`: the `note_assumption` tool, whose description tells Claude when to use it, and saves each call as an assumption. No `prompt.compose` hook: org sessions skip it.
 - `thread.ts`: keeps the thread matched to the session id across `/clear`, `/resume` and forks, saves per-session snapshots (up to 50), and stamps when a turn starts.
-- `thread-state.ts`: every `$.state` atom (thread, pendingSwitch, turnRunning, turnStartedAt, limits, agents, agentActivity, now) and its read/write helpers. The engine only lets the defining file touch an atom, so all access lives here.
-- `model.ts`: pure functions: thread updates (todos, tasks, file diffs, skills, MCPs, usage, assumptions, collapsed sections), formatters, cache-warmth math, agent-list merging and the agent tree.
-- `visuals.ts`: the color palette and drawing helpers: eighth-block bars, diff bars, short folder paths and grouping files by folder.
+- `thread-state.ts`: every `$.state` atom (thread, pendingSwitch, turnRunning, turnStartedAt, limits, agents, agentActivity, now, view) and its read/write helpers. The engine only lets the defining file touch an atom, so all access lives here.
+- `model.ts`: pure functions: thread updates (todos, tasks, file diffs, skills, MCPs, usage, assumptions, collapsed sections), formatters, cache-warmth math, agent-list merging, the agent tree, plan limit labels and packing the mini strip's segments into rows.
+- `visuals.ts`: the color palette and drawing helpers: eighth-block bars, diff bars, plan limit colors, short folder paths and grouping files by folder.
 - `test-support.ts`: records each write of the `thread` state through `state.set`, since tests can't read plugin state directly.
 
 `types/index.d.ts` is the `$.state` contract: every value above is declared there, and `claude plugin validate` checks the module against it.

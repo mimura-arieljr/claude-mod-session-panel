@@ -1,7 +1,7 @@
 {
   "name": "session-panel",
-  "version": "0.3.5",
-  "description": "Pane showing progress, usage, changed files, tools and assumptions for the current thread",
+  "version": "0.4.0",
+  "description": "Pane showing progress, usage, changed files, tools and assumptions for the current thread, with a mini strip view above the prompt",
   "types": "./types/index.d.ts",
   "userConfig": {
     "cacheTtl": {
