@@ -21,6 +21,8 @@ export const COLORS = {
   textMid: '#C3C8D1',
   label: '#AEB4BF',
   muted: '#8B93A1',
+  // Bar track in the band, which sits on the terminal's own background
+  bandTrack: '#5A6273',
 } as const
 
 function clamp01(n: number): number {

@@ -2,6 +2,7 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
 import { isEngineOnly } from './band'
+import { COLORS } from './visuals'
 
 const BAND = {
   plugin: 'session-panel',
@@ -153,5 +154,16 @@ test('full view does not read usage to draw the band', async ($, on) => {
   const counts = engine(on)
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(counts.usage).toBe(0)
+  await ui.unmount()
+})
+
+// The band sits on the terminal's own background, not the panel's darker page.
+test('dividers and bar tracks use colors that show on the terminal background', async ($, on) => {
+  engine(on)
+  await $.session.measure({ ...MEASURE, rateLimits: LIMITS })
+  await $.command.run(command('mini'))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ text: /│/, type: 'Text' }))?.props.color).toBe(COLORS.muted)
+  expect((await ui.find({ text: /^░+$/, type: 'Text' }))?.props.color).toBe(COLORS.bandTrack)
   await ui.unmount()
 })
