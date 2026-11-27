@@ -36,6 +36,7 @@ test("a subagent's assumption is marked", async ($, on) => {
 test('the tool description says when to use it', () => {
   expect(TOOL_DESCRIPTION).toContain('assume something the user did not state')
   expect(TOOL_DESCRIPTION).toContain('keep working')
+  expect(TOOL_DESCRIPTION).toContain('ask the user first')
 })
 
 test('the system prompt is left alone', async ($, on) => {
